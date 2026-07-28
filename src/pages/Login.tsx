@@ -1,16 +1,49 @@
 import { useState } from 'react';
+import { useNavigate } from 'react-router-dom';
 import { AuthSidePanel } from '../components/auth/AuthSidePanel';
 import { Input } from '../components/ui/Input';
+import { api } from '../services/api';
 
 export function Login() {
+  const navigate = useNavigate();
+
   const [formData, setFormData] = useState({
     email: '',
     password: '',
     rememberMe: false,
   });
 
-  const handleSubmit = (e: React.FormEvent) => {
+  const [loading, setLoading] = useState(false);
+  const [errorMessage, setErrorMessage] = useState<string | null>(null);
+
+  const handleSubmit = async (e: React.FormEvent) => {
     e.preventDefault();
+    setErrorMessage(null);
+
+    const payload = {
+      email: formData.email,
+      senha: formData.password,
+    };
+
+    try {
+      setLoading(true);
+
+      const response = await api.post('/auth/login', payload);
+
+      if (response.data && response.data.usuario) {
+        localStorage.setItem('user', JSON.stringify(response.data.usuario));
+      }
+
+      navigate('/');
+    } catch (error: any) {
+      if (error.response?.data?.detail) {
+        setErrorMessage(error.response.data.detail);
+      } else {
+        setErrorMessage('Não foi possível realizar o login. Verifique suas credenciais.');
+      }
+    } finally {
+      setLoading(false);
+    }
   };
 
   return (
@@ -26,6 +59,13 @@ export function Login() {
             </p>
           </div>
 
+          {/* Alerta visual de erro */}
+          {errorMessage && (
+            <div className="p-3.5 bg-red-500/10 border border-red-500/30 rounded-xl text-red-400 text-xs leading-relaxed">
+              {errorMessage}
+            </div>
+          )}
+
           <form onSubmit={handleSubmit} className="space-y-5">
             <Input
               id="email"
@@ -34,6 +74,7 @@ export function Login() {
               placeholder="seu@email.gov.br"
               value={formData.email}
               onChange={(e) => setFormData({ ...formData, email: e.target.value })}
+              disabled={loading}
               required
             />
 
@@ -44,6 +85,7 @@ export function Login() {
               placeholder="••••••••"
               value={formData.password}
               onChange={(e) => setFormData({ ...formData, password: e.target.value })}
+              disabled={loading}
               rightLabelAction={
                 <a href="/esqueci-senha" className="text-xs text-brand-400 hover:underline">
                   Esqueceu a senha?
@@ -58,6 +100,7 @@ export function Login() {
                 type="checkbox"
                 checked={formData.rememberMe}
                 onChange={(e) => setFormData({ ...formData, rememberMe: e.target.checked })}
+                disabled={loading}
                 className="rounded border-slate-700 bg-slate-900 text-brand-500 focus:ring-brand-500 focus:ring-offset-slate-900"
               />
               <label htmlFor="rememberMe" className="text-xs text-slate-400 select-none cursor-pointer">
@@ -67,9 +110,10 @@ export function Login() {
 
             <button
               type="submit"
-              className="w-full bg-brand-500 hover:bg-brand-600 text-white font-medium py-3 rounded-full transition-all shadow-sm text-sm mt-2"
+              disabled={loading}
+              className="w-full bg-brand-500 hover:bg-brand-600 disabled:opacity-60 text-white font-medium py-3 rounded-full transition-all shadow-sm text-sm mt-2 flex items-center justify-center"
             >
-              Entrar
+              {loading ? 'Entrando...' : 'Entrar'}
             </button>
           </form>
 

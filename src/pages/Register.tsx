@@ -1,8 +1,12 @@
 import { useState } from 'react';
+import { useNavigate } from 'react-router-dom'; 
 import { AuthSidePanel } from '../components/auth/AuthSidePanel';
 import { Input } from '../components/ui/Input';
+import { api } from '../services/api'; 
 
 export function Register() {
+  const navigate = useNavigate();
+
   const [formData, setFormData] = useState({
     fullName: '',
     email: '',
@@ -11,9 +15,38 @@ export function Register() {
     termsAccepted: false,
   });
 
-  const handleSubmit = (e: React.FormEvent) => {
+  const [loading, setLoading] = useState(false);
+  const [errorMessage, setErrorMessage] = useState<string | null>(null);
+
+  const handleSubmit = async (e: React.FormEvent) => {
     e.preventDefault();
-  };
+    setErrorMessage(null);
+
+    if (formData.password !== formData.confirmPassword) {
+      setErrorMessage('As senhas não coincidem. Verifique e tente novamente.');
+      return;
+    }
+
+    const payload = {
+      nome: formData.fullName,
+      email: formData.email,
+      senha: formData.password,
+    };
+
+    try {
+      setLoading(true);
+      await api.post('/auth/register', payload);
+      navigate('/login');
+    } catch (error: any) {
+      if (error.response?.data?.detail) {
+        setErrorMessage(error.response.data.detail);
+      } else {
+        setErrorMessage('Ocorreu um erro ao tentar cadastrar. Tente novamente mais tarde.');
+      }
+    } finally {
+      setLoading(false);
+    }
+  }; 
 
   return (
     <div className="min-h-screen bg-dark-900 text-slate-100 flex selection:bg-brand-500 selection:text-white">
@@ -28,6 +61,12 @@ export function Register() {
             </p>
           </div>
 
+          {errorMessage && (
+            <div className="p-3.5 bg-red-500/10 border border-red-500/30 rounded-xl text-red-400 text-xs leading-relaxed">
+              {errorMessage}
+            </div>
+          )}
+
           <form onSubmit={handleSubmit} className="space-y-5">
             <Input
               id="fullName"
@@ -36,6 +75,7 @@ export function Register() {
               placeholder="Maria Silva"
               value={formData.fullName}
               onChange={(e) => setFormData({ ...formData, fullName: e.target.value })}
+              disabled={loading}
               required
             />
 
@@ -46,6 +86,7 @@ export function Register() {
               placeholder="seu@email.gov.br"
               value={formData.email}
               onChange={(e) => setFormData({ ...formData, email: e.target.value })}
+              disabled={loading}
               required
             />
 
@@ -57,6 +98,7 @@ export function Register() {
                 placeholder="••••••••"
                 value={formData.password}
                 onChange={(e) => setFormData({ ...formData, password: e.target.value })}
+                disabled={loading}
                 required
               />
 
@@ -67,6 +109,7 @@ export function Register() {
                 placeholder="••••••••"
                 value={formData.confirmPassword}
                 onChange={(e) => setFormData({ ...formData, confirmPassword: e.target.value })}
+                disabled={loading}
                 required
               />
             </div>
@@ -77,6 +120,7 @@ export function Register() {
                 type="checkbox"
                 checked={formData.termsAccepted}
                 onChange={(e) => setFormData({ ...formData, termsAccepted: e.target.checked })}
+                disabled={loading}
                 className="mt-0.5 rounded border-slate-700 bg-slate-900 text-brand-500 focus:ring-brand-500 focus:ring-offset-slate-900"
                 required
               />
@@ -91,9 +135,10 @@ export function Register() {
 
             <button
               type="submit"
-              className="w-full bg-brand-500 hover:bg-brand-600 text-white font-medium py-3 rounded-full transition-all shadow-sm text-sm mt-2"
+              disabled={loading}
+              className="w-full bg-brand-500 hover:bg-brand-600 disabled:opacity-60 text-white font-medium py-3 rounded-full transition-all shadow-sm text-sm mt-2 flex items-center justify-center"
             >
-              Criar conta
+              {loading ? 'Cadastrando...' : 'Criar conta'}
             </button>
           </form>
 

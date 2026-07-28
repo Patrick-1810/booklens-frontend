@@ -53,7 +53,7 @@ export function Home() {
             Envie uma imagem, receba título e parágrafos estruturados, pesquise termos com autocompletar e mantenha todo o acervo organized.
           </p>
 
-          {/* Botões CTA Redondos e Sem Seta */}
+          {/* Botões CTA*/}
           <div className="flex flex-wrap items-center gap-3 mb-16">
             <a
               href="/scanner"
