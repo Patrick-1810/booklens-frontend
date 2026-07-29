@@ -45,8 +45,15 @@ export function Scanner() {
     setOcrResult(null);
   };
 
-  const handleProcessDocument = async () => {
-    if (!selectedFile) return;
+  const handleProcessDocument = async (e?: React.FormEvent | React.MouseEvent) => {
+    if (e) {
+      e.preventDefault();
+    }
+
+    if (!selectedFile) {
+      console.warn('Processamento cancelado: Nenhum arquivo selecionado.');
+      return;
+    }
 
     const formData = new FormData();
     formData.append('file', selectedFile.file);
@@ -55,9 +62,13 @@ export function Scanner() {
       setUploading(true);
       setErrorMessage(null);
 
+      console.log('Iniciando envio do arquivo para FastAPI:', selectedFile.file.name);
+
       const response = await api.post<OCRResponse>('/ocr/extrair-texto', formData, {
         headers: { 'Content-Type': 'multipart/form-data' },
       });
+
+      console.log('Resposta recebida do servidor:', response.data);
 
       const data = response.data;
       setOcrResult(data);
@@ -71,8 +82,9 @@ export function Scanner() {
         ...prev,
       ]);
     } catch (err: any) {
+      console.error('Erro na requisição OCR:', err);
       setErrorMessage(
-        err.response?.data?.detail || 'Erro ao comunicar com o servidor OCR. Tente novamente.'
+        err.response?.data?.detail || err.message || 'Erro ao comunicar com o servidor OCR. Tente novamente.'
       );
     } finally {
       setUploading(false);

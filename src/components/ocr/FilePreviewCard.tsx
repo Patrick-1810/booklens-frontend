@@ -54,6 +54,7 @@ export function FilePreviewCard({
 
       <div className="flex justify-end pt-2">
         <button
+          type="button"
           onClick={onProcess}
           disabled={uploading}
           className="w-full sm:w-auto bg-brand-500 hover:bg-brand-600 disabled:opacity-60 text-white font-medium px-8 py-3 rounded-xl transition-all shadow-lg shadow-brand-500/10 flex items-center justify-center gap-2 text-sm"
@@ -65,7 +66,7 @@ export function FilePreviewCard({
             </>
           ) : (
             <>
-              Iniciar Processamento OCR
+              Iniciar Processamento 
               <ArrowRight className="w-4 h-4" />
             </>
           )}
