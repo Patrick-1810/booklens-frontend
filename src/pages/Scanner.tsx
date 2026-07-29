@@ -3,25 +3,21 @@ import { AlertCircle } from 'lucide-react';
 import { DropZone } from '../components/ocr/DropZone';
 import { FilePreviewCard } from '../components/ocr/FilePreviewCard';
 import { ScanHistory } from '../components/ocr/ScanHistory';
+import { OCRResultCard } from '../components/ocr/OCRResultCard';
 import { DashboardLayout } from '../components/layout/DashboardLayout';
 import { api } from '../services/api';
-
-interface SelectedFileState {
-  file: File;
-  previewUrl: string;
-}
+import type { OCRResponse, SelectedFileState } from '../types/ocr';
 
 export function Scanner() {
   const [selectedFile, setSelectedFile] = useState<SelectedFileState | null>(null);
   const [uploading, setUploading] = useState(false);
   const [errorMessage, setErrorMessage] = useState<string | null>(null);
+  const [ocrResult, setOcrResult] = useState<OCRResponse | null>(null);
 
-  const historyItems = [
+  const [historyItems, setHistoryItems] = useState([
     { id: '1', title: 'Edital de Concurso Público 2026.pdf', date: 'Há 2 horas' },
     { id: '2', title: 'Plano Diretor Municipal.pdf', date: 'Ontem' },
-    { id: '3', title: 'Relatório Anual de Transparência.pdf', date: 'Há 3 dias' },
-    { id: '4', title: 'Diário Oficial da União.pdf', date: 'Semana passada' },
-  ];
+  ]);
 
   const handleFileSelect = (file: File) => {
     setErrorMessage(null);
@@ -38,6 +34,7 @@ export function Scanner() {
 
     const previewUrl = URL.createObjectURL(file);
     setSelectedFile({ file, previewUrl });
+    setOcrResult(null);
   };
 
   const handleRemoveFile = () => {
@@ -45,6 +42,7 @@ export function Scanner() {
       URL.revokeObjectURL(selectedFile.previewUrl);
     }
     setSelectedFile(null);
+    setOcrResult(null);
   };
 
   const handleProcessDocument = async () => {
@@ -57,14 +55,24 @@ export function Scanner() {
       setUploading(true);
       setErrorMessage(null);
 
-      const response = await api.post('/ocr/process', formData, {
+      const response = await api.post<OCRResponse>('/ocr/extrair-texto', formData, {
         headers: { 'Content-Type': 'multipart/form-data' },
       });
 
-      console.log('Documento processado com sucesso:', response.data);
+      const data = response.data;
+      setOcrResult(data);
+
+      setHistoryItems((prev) => [
+        {
+          id: String(data.id_registro),
+          title: data.estrutura.titulo || data.arquivo,
+          date: 'Agora mesmo',
+        },
+        ...prev,
+      ]);
     } catch (err: any) {
       setErrorMessage(
-        err.response?.data?.detail || 'Erro ao processar a imagem. Tente novamente.'
+        err.response?.data?.detail || 'Erro ao comunicar com o servidor OCR. Tente novamente.'
       );
     } finally {
       setUploading(false);
@@ -79,7 +87,7 @@ export function Scanner() {
             Digitalizar Documento
           </h1>
           <p className="text-sm text-slate-400">
-            Envie a imagem do documento para iniciar a extração.
+            Envie a imagem do documento para iniciar a extração OCR avançada.
           </p>
         </header>
 
@@ -92,7 +100,9 @@ export function Scanner() {
           )}
 
           <section className="bg-dark-850 border border-slate-800 rounded-2xl p-6 sm:p-10 transition-all">
-            {!selectedFile ? (
+            {ocrResult ? (
+              <OCRResultCard result={ocrResult} onReset={handleRemoveFile} />
+            ) : !selectedFile ? (
               <DropZone onFileSelect={handleFileSelect} />
             ) : (
               <FilePreviewCard
