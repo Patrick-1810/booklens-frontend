@@ -1,7 +1,11 @@
-import { Scan, BookOpen, User, LogOut, FileText } from 'lucide-react';
+import { Scan, BookOpen, User, LogOut, FileText, X } from 'lucide-react';
 import { Link, useLocation } from 'react-router-dom';
 
-export function Sidebar() {
+interface SidebarProps {
+  onCloseMobile?: () => void;
+}
+
+export function Sidebar({ onCloseMobile }: SidebarProps) {
   const location = useLocation();
 
   const navItems = [
@@ -11,21 +15,34 @@ export function Sidebar() {
   ];
 
   return (
-    <aside className="w-64 bg-dark-850 border-r border-slate-800 flex flex-col justify-between h-screen sticky top-0 shrink-0 p-4">
+    <aside className="w-64 bg-dark-850 border-r border-slate-800 flex flex-col justify-between h-full p-4">
       <div className="space-y-8">
         {/* Logo BookLens */}
-        <div className="flex items-center gap-3 px-2 pt-2">
-          <div className="p-2.5 bg-slate-800/80 border border-slate-700/60 text-white rounded-xl shadow-inner flex items-center justify-center">
-            <FileText className="w-6 h-6 text-white" />
+        <div className="flex items-center justify-between px-2 pt-2">
+          <div className="flex items-center gap-3">
+            <div className="p-2.5 bg-slate-800/80 border border-slate-700/60 text-white rounded-xl shadow-inner flex items-center justify-center">
+              <FileText className="w-6 h-6 text-white" />
+            </div>
+            <div>
+              <h1 className="text-xl font-bold tracking-tight text-white leading-none">
+                BookLens
+              </h1>
+              <p className="text-[11px] text-slate-400 mt-1 font-medium">
+                Extração & Gestão OCR
+              </p>
+            </div>
           </div>
-          <div>
-            <h1 className="text-xl font-bold tracking-tight text-white leading-none">
-              BookLens
-            </h1>
-            <p className="text-[11px] text-slate-400 mt-1 font-medium">
-              Extração & Gestão OCR
-            </p>
-          </div>
+
+          {/* Botão fechar (apenas visível em mobile quando ativado) */}
+          {onCloseMobile && (
+            <button
+              onClick={onCloseMobile}
+              className="lg:hidden p-2 text-slate-400 hover:text-white hover:bg-dark-800 rounded-lg transition-colors"
+              title="Fechar menu"
+            >
+              <X className="w-5 h-5" />
+            </button>
+          )}
         </div>
 
         {/* Links de Navegação */}
@@ -38,6 +55,7 @@ export function Sidebar() {
               <Link
                 key={item.path}
                 to={item.path}
+                onClick={onCloseMobile}
                 className={`flex items-center gap-3 px-3.5 py-3 rounded-xl text-sm font-medium transition-all ${
                   isActive
                     ? 'bg-brand-500/10 text-brand-400 border border-brand-500/20 shadow-sm'
