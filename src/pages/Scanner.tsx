@@ -3,6 +3,7 @@ import { AlertCircle } from 'lucide-react';
 import { DropZone } from '../components/ocr/DropZone';
 import { FilePreviewCard } from '../components/ocr/FilePreviewCard';
 import { ScanHistory } from '../components/ocr/ScanHistory';
+import { DashboardLayout } from '../components/layout/DashboardLayout';
 import { api } from '../services/api';
 
 interface SelectedFileState {
@@ -16,27 +17,11 @@ export function Scanner() {
   const [errorMessage, setErrorMessage] = useState<string | null>(null);
 
   const historyItems = [
-  {
-    id: '1',
-    title: 'Edital de Concurso Público 2026.pdf',
-    date: 'Há 2 horas',
-  },
-  {
-    id: '2',
-    title: 'Plano Diretor Municipal.pdf',
-    date: 'Ontem',
-  },
-  {
-    id: '3',
-    title: 'Relatório Anual de Transparência.pdf',
-    date: 'Há 3 dias',
-  },
-  {
-    id: '4',
-    title: 'Diário Oficial da União.pdf',
-    date: 'Semana passada',
-  },
-];
+    { id: '1', title: 'Edital de Concurso Público 2026.pdf', date: 'Há 2 horas' },
+    { id: '2', title: 'Plano Diretor Municipal.pdf', date: 'Ontem' },
+    { id: '3', title: 'Relatório Anual de Transparência.pdf', date: 'Há 3 dias' },
+    { id: '4', title: 'Diário Oficial da União.pdf', date: 'Semana passada' },
+  ];
 
   const handleFileSelect = (file: File) => {
     setErrorMessage(null);
@@ -87,41 +72,43 @@ export function Scanner() {
   };
 
   return (
-    <div className="min-h-screen bg-dark-900 text-slate-100 p-4 sm:p-8 space-y-8">
-      <header className="max-w-5xl mx-auto space-y-1">
-        <h1 className="text-2xl sm:text-3xl font-bold tracking-tight text-white">
-          Digitalizar Documento
-        </h1>
-        <p className="text-sm text-slate-400">
-          Envie a imagem do documento para iniciar a extração.
-        </p>
-      </header>
+    <DashboardLayout>
+      <div className="p-6 sm:p-10 space-y-8 max-w-6xl mx-auto">
+        <header className="space-y-1">
+          <h1 className="text-2xl sm:text-3xl font-bold tracking-tight text-white">
+            Digitalizar Documento
+          </h1>
+          <p className="text-sm text-slate-400">
+            Envie a imagem do documento para iniciar a extração.
+          </p>
+        </header>
 
-      <main className="max-w-5xl mx-auto space-y-8">
-        {errorMessage && (
-          <div className="flex items-center gap-3 p-4 bg-red-500/10 border border-red-500/30 rounded-2xl text-red-400 text-sm">
-            <AlertCircle className="w-5 h-5 shrink-0" />
-            <p>{errorMessage}</p>
-          </div>
-        )}
-
-        <section className="bg-dark-850 border border-slate-800 rounded-2xl p-6 sm:p-10 transition-all">
-          {!selectedFile ? (
-            <DropZone onFileSelect={handleFileSelect} />
-          ) : (
-            <FilePreviewCard
-              fileName={selectedFile.file.name}
-              fileSize={selectedFile.file.size}
-              previewUrl={selectedFile.previewUrl}
-              uploading={uploading}
-              onRemove={handleRemoveFile}
-              onProcess={handleProcessDocument}
-            />
+        <main className="space-y-8">
+          {errorMessage && (
+            <div className="flex items-center gap-3 p-4 bg-red-500/10 border border-red-500/30 rounded-2xl text-red-400 text-sm">
+              <AlertCircle className="w-5 h-5 shrink-0" />
+              <p>{errorMessage}</p>
+            </div>
           )}
-        </section>
 
-        <ScanHistory items={historyItems} />
-      </main>
-    </div>
+          <section className="bg-dark-850 border border-slate-800 rounded-2xl p-6 sm:p-10 transition-all">
+            {!selectedFile ? (
+              <DropZone onFileSelect={handleFileSelect} />
+            ) : (
+              <FilePreviewCard
+                fileName={selectedFile.file.name}
+                fileSize={selectedFile.file.size}
+                previewUrl={selectedFile.previewUrl}
+                uploading={uploading}
+                onRemove={handleRemoveFile}
+                onProcess={handleProcessDocument}
+              />
+            )}
+          </section>
+
+          <ScanHistory items={historyItems} />
+        </main>
+      </div>
+    </DashboardLayout>
   );
 }
