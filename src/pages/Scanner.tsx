@@ -75,11 +75,11 @@ export function Scanner() {
 
       setHistoryItems((prev) => [
         {
-          id: String(data.id_registro),
-          title: data.estrutura.titulo || data.arquivo,
-          date: 'Agora mesmo',
+           id: String(data.id_registro ?? Date.now()),
+           title: data.titulo || data.estrutura?.titulo || data.arquivo || 'Documento Sem Título',
+           date: 'Agora mesmo',
         },
-        ...prev,
+          ...prev,
       ]);
     } catch (err: any) {
       console.error('Erro na requisição OCR:', err);

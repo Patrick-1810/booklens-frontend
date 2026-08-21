@@ -1,13 +1,13 @@
-export interface SelectedFileState {
-  file: File;
-  previewUrl: string;
-}
+export type TipoElemento = 'title' | 'heading' | 'paragraph' | 'list';
+export type AlinhamentoElemento = 'left' | 'center' | 'right' | 'justify';
 
 export interface ElementoLayout {
-  id?: string;
+  id: string;
+  tipo: TipoElemento;
   texto: string;
-  alinhamento?: 'left' | 'center' | 'right' | 'justify';
-  estilo?: 'titulo' | 'subtitulo' | 'normal';
+  texto_original?: string;
+  alinhamento: AlinhamentoElemento;
+  confianca_ocr?: number;
   altura_fonte_px?: number;
   x?: number;
   y?: number;
@@ -18,6 +18,7 @@ export interface ElementoLayout {
   width_relativo?: number;
   height_relativo?: number;
   altura_fonte_relativa?: number;
+  numero_linhas?: number;
   largura_pagina?: number;
   altura_pagina?: number;
 }
@@ -28,22 +29,28 @@ export interface PalavraSuspeita {
 }
 
 export interface EstruturaOCR {
-  titulo: string;
-  paragrafos: string[];
+  titulo?: string;
+  paragrafos?: string[];
   elementos?: ElementoLayout[];
-  largura_pagina?: number;
-  altura_pagina?: number;
 }
 
 export interface OCRResponse {
-  sucesso: boolean;
-  id_registro: number;
-  arquivo: string;
-  tempo_processamento_segundos: number;
-  estrutura: EstruturaOCR;
-  texto_completo: string;
+  id_registro?: string | number;
+  arquivo?: string;
+  tempo_processamento_segundos?: number;
+  texto_completo?: string;
+  texto_completo_votado?: string;
+  titulo?: string;
+  paragrafos?: string[];
+  elementos?: ElementoLayout[];
+  estrutura?: EstruturaOCR;
   palavras_suspeitas?: PalavraSuspeita[];
-  salvo_em: string;
   largura_pagina?: number;
   altura_pagina?: number;
+  confianca_preprocessamento?: number;
+}
+
+export interface SelectedFileState {
+  file: File;
+  previewUrl: string;
 }
