@@ -2,6 +2,7 @@ import { CheckCircle2, Copy, FileText, Save, Highlighter, LayoutGrid, AlignLeft 
 import { useState, useEffect, useRef } from 'react';
 import type { OCRResponse, ElementoLayout, PalavraSuspeita } from '../../types/ocr';
 import { api } from '../../services/api';
+import ReactMarkdown from 'react-markdown';
 
 interface OCRResultCardProps {
   result: OCRResponse;
@@ -26,7 +27,7 @@ export function OCRResultCard({ result, onReset }: OCRResultCardProps) {
   const [saving, setSaving] = useState(false);
   const [saveSuccess, setSaveSuccess] = useState(false);
   const [containerHeight, setContainerHeight] = useState<number>(0);
-  const [modoLayout, setModoLayout] = useState<'fluxo' | 'overlay'>('fluxo');
+  const [metodoComparacao, setMetodoComparacao] = useState<'pdi' | 'docling'>('pdi');
 
   const [menuCorrecao, setMenuCorrecao] = useState<{
     indexParagrafo: number;
@@ -85,14 +86,17 @@ export function OCRResultCard({ result, onReset }: OCRResultCardProps) {
   });
 
   const primeiroElemento = elementos[0];
-  const larguraPaginaOrig =
-    primeiroElemento?.largura_pagina ||
-    result.largura_pagina ||
+  const larguraPaginaOrig = 
+    primeiroElemento?.largura_pagina || 
+    result.largura_pagina || 
+    result.estrutura?.largura_pagina || 
     1200;
+
   const alturaPaginaOrig =
     primeiroElemento?.altura_pagina ||
     result.altura_pagina ||
     1600;
+
   const aspectRatioDocumento = `${larguraPaginaOrig} / ${alturaPaginaOrig}`;
 
   const handleCopyText = () => {
@@ -221,29 +225,29 @@ export function OCRResultCard({ result, onReset }: OCRResultCardProps) {
 
         <div className="flex items-center gap-2">
           <div className="flex items-center bg-slate-900 p-0.5 rounded-lg border border-slate-800 mr-1">
-            <button
+              <button
+                type="button"
+                onClick={() => setMetodoComparacao('pdi')}
+                className={`flex items-center gap-1.5 text-xs px-3 py-1.5 rounded-md font-medium transition-all ${
+                  metodoComparacao === 'pdi'
+                    ? 'bg-brand-500 text-white shadow-sm'
+                    : 'text-slate-400 hover:text-slate-200'
+                }`}
+              >
+        <LayoutGrid className="w-3.5 h-3.5" /> PDI + OCR (Autoral)
+      </button>
+         <button
               type="button"
-              onClick={() => setModoLayout('fluxo')}
-              className={`flex items-center gap-1 text-xs px-2.5 py-1.5 rounded-md font-medium transition-all ${
-                modoLayout === 'fluxo'
-                  ? 'bg-slate-800 text-white shadow-sm'
+              onClick={() => setMetodoComparacao('docling')}
+              className={`flex items-center gap-1.5 text-xs px-3 py-1.5 rounded-md font-medium transition-all ${
+                metodoComparacao === 'docling'
+                  ? 'bg-brand-500 text-white shadow-sm'
                   : 'text-slate-400 hover:text-slate-200'
               }`}
             >
-              <AlignLeft className="w-3.5 h-3.5" /> Fluxo
-            </button>
-            <button
-              type="button"
-              onClick={() => setModoLayout('overlay')}
-              className={`flex items-center gap-1 text-xs px-2.5 py-1.5 rounded-md font-medium transition-all ${
-                modoLayout === 'overlay'
-                  ? 'bg-slate-800 text-white shadow-sm'
-                  : 'text-slate-400 hover:text-slate-200'
-              }`}
-            >
-              <LayoutGrid className="w-3.5 h-3.5" /> Overlay (PDI)
-            </button>
-          </div>
+          <AlignLeft className="w-3.5 h-3.5" /> Docling (IBM)
+       </button>
+    </div>
 
           <button
             type="button"
@@ -301,50 +305,14 @@ export function OCRResultCard({ result, onReset }: OCRResultCardProps) {
           />
         </div>
 
-        {modoLayout === 'fluxo' && (
-          <div className="space-y-[1.5%] font-serif w-full">
-            {elementos.map((item, index) => {
-              const alinhamentoClass = ALINHAMENTO_CLASS[item.alinhamento || 'left'] || 'text-left';
-
-              let fontSizePx: number;
-              if (item.altura_fonte_relativa && containerHeight > 0) {
-                fontSizePx = Math.round(item.altura_fonte_relativa * containerHeight);
-                fontSizePx = Math.max(11, Math.min(fontSizePx, 48));
-              } else {
-                fontSizePx = item.tipo === 'title' ? 22 : item.tipo === 'heading' ? 17 : 14;
-              }
-
-              const isTitle = item.tipo === 'title';
-              const isHeading = item.tipo === 'heading';
-
-              return (
-                <div
-                  key={item.id || index}
-                  contentEditable
-                  suppressContentEditableWarning
-                  onBlur={(e) => handleElementoChange(index, e.currentTarget.innerText)}
-                  style={{
-                    fontSize: `${fontSizePx}px`,
-                    lineHeight: 1.35,
-                    fontWeight: isTitle ? 700 : isHeading ? 600 : 400,
-                  }}
-                  className={`focus:outline-none focus:bg-amber-50/50 p-0.5 rounded transition-colors text-slate-800 ${alinhamentoClass}`}
-                >
-                  {renderizarParagrafoInterativo(item.texto, index)}
-                </div>
-              );
-            })}
-          </div>
-        )}
-
-        {modoLayout === 'overlay' && (
+        {/* Renderização do resultado autoral (PDI / Overlay) */}
+        {metodoComparacao === 'pdi' && (
           <div className="relative w-full h-full">
             {elementos.map((item, index) => {
               const alinhamentoClass = ALINHAMENTO_CLASS[item.alinhamento || 'left'] || 'text-left';
-
               const hasCoords = item.x_relativo !== undefined && item.y_relativo !== undefined;
+              
               let fontSizePx: number;
-
               if (item.altura_fonte_relativa && containerHeight > 0) {
                 fontSizePx = Math.round(item.altura_fonte_relativa * containerHeight);
                 fontSizePx = Math.max(10, Math.min(fontSizePx, 40));
@@ -362,10 +330,7 @@ export function OCRResultCard({ result, onReset }: OCRResultCardProps) {
                     lineHeight: 1.25,
                     fontWeight: item.tipo === 'title' ? 700 : item.tipo === 'heading' ? 600 : 400,
                   }
-                : {
-                    fontSize: `${fontSizePx}px`,
-                    lineHeight: 1.35,
-                  };
+                : { fontSize: `${fontSizePx}px`, lineHeight: 1.35 };
 
               return (
                 <div
@@ -383,6 +348,41 @@ export function OCRResultCard({ result, onReset }: OCRResultCardProps) {
           </div>
         )}
 
+        {/* Renderização do resultado via Docling */}
+       {metodoComparacao === 'docling' && (() => { // Trata e limpa o texto do Markdown
+       const markdownLimpo = (result.docling?.texto_markdown || '')
+        .replace(/<!--\s*image\s*-->/gi, '') // Remove qualquer <!-- image -->
+        .replace(/\n\s*\n\s*\n/g, '\n\n');   // Remove linhas em branco excessivas que sobraram
+
+      return (
+        <div className="space-y-4 font-sans text-slate-800 p-4 overflow-y-auto max-h-full leading-relaxed">
+          <div className="bg-slate-100 p-2.5 rounded text-[11px] font-mono text-slate-500 mb-2 border border-slate-200">
+            Extração estruturada em Markdown (Docling)
+          </div>
+
+          <div className="prose prose-slate max-w-none space-y-3 text-sm">
+            <ReactMarkdown
+              components={{
+                h2: ({ node, ...props }) => (
+                  <h2 className="text-base font-bold text-slate-900 border-b border-slate-200 pb-1 mt-4 mb-2 uppercase tracking-wide" {...props} />
+                ),
+                ul: ({ node, ...props }) => (
+                  <ul className="list-disc pl-5 space-y-1 text-slate-700" {...props} />
+                ),
+                li: ({ node, ...props }) => (
+                  <li className="text-slate-700" {...props} />
+                ),
+                p: ({ node, ...props }) => (
+                  <p className="text-slate-800 my-1 leading-normal" {...props} />
+                ),
+              }}
+            >
+              {markdownLimpo || 'Nenhum texto extraído pelo Docling.'}
+            </ReactMarkdown>
+          </div>
+        </div>
+      );
+    })()}
         {menuCorrecao && (
           <div
             style={{

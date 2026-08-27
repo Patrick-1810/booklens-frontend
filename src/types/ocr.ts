@@ -32,6 +32,12 @@ export interface EstruturaOCR {
   titulo?: string;
   paragrafos?: string[];
   elementos?: ElementoLayout[];
+  largura_pagina?: number; 
+  altura_pagina?: number;
+}
+export interface DoclingResultado {
+  texto_markdown?: string;
+  paragrafos?: string[];
 }
 
 export interface OCRResponse {
@@ -44,6 +50,7 @@ export interface OCRResponse {
   paragrafos?: string[];
   elementos?: ElementoLayout[];
   estrutura?: EstruturaOCR;
+  docling?: DoclingResultado;
   palavras_suspeitas?: PalavraSuspeita[];
   largura_pagina?: number;
   altura_pagina?: number;
