@@ -5,6 +5,7 @@ import { FilePreviewCard } from '../components/ocr/FilePreviewCard';
 import { ScanHistory } from '../components/ocr/ScanHistory';
 import { OCRResultCard } from '../components/ocr/OCRResultCard';
 import { DashboardLayout } from '../components/layout/DashboardLayout';
+import axios from 'axios';
 import { api } from '../services/api';
 import type { OCRResponse, SelectedFileState } from '../types/ocr';
 
@@ -81,11 +82,15 @@ export function Scanner() {
         },
           ...prev,
       ]);
-    } catch (err: any) {
+    } catch (err: unknown) {
       console.error('Erro na requisição OCR:', err);
-      setErrorMessage(
-        err.response?.data?.detail || err.message || 'Erro ao comunicar com o servidor OCR. Tente novamente.'
-      );
+      let message = 'Erro ao comunicar com o servidor OCR. Tente novamente.';
+      if (axios.isAxiosError(err)) {
+        message = err.response?.data?.detail || err.message || message;
+      } else if (err instanceof Error) {
+        message = err.message;
+      }
+      setErrorMessage(message);
     } finally {
       setUploading(false);
     }

@@ -55,6 +55,7 @@ export function OCRResultCard({ result, onReset }: OCRResultCardProps) {
   }, [elementos]);
 
   useEffect(() => {
+    // eslint-disable-next-line react-hooks/set-state-in-effect
     setTitulo(result.titulo || result.estrutura?.titulo || 'SEM TÍTULO');
 
     const elementosRecebidos = result.elementos || result.estrutura?.elementos;
@@ -166,7 +167,7 @@ export function OCRResultCard({ result, onReset }: OCRResultCardProps) {
 
       setSaveSuccess(true);
       setTimeout(() => setSaveSuccess(false), 3000);
-    } catch (err) {
+    } catch {
       alert('Erro ao salvar o documento.');
     } finally {
       setSaving(false);
@@ -363,16 +364,16 @@ export function OCRResultCard({ result, onReset }: OCRResultCardProps) {
           <div className="prose prose-slate max-w-none space-y-3 text-sm">
             <ReactMarkdown
               components={{
-                h2: ({ node, ...props }) => (
+                h2: ({ ...props }) => (
                   <h2 className="text-base font-bold text-slate-900 border-b border-slate-200 pb-1 mt-4 mb-2 uppercase tracking-wide" {...props} />
                 ),
-                ul: ({ node, ...props }) => (
+                ul: ({ ...props }) => (
                   <ul className="list-disc pl-5 space-y-1 text-slate-700" {...props} />
                 ),
-                li: ({ node, ...props }) => (
+                li: ({ ...props }) => (
                   <li className="text-slate-700" {...props} />
                 ),
-                p: ({ node, ...props }) => (
+                p: ({ ...props }) => (
                   <p className="text-slate-800 my-1 leading-normal" {...props} />
                 ),
               }}
