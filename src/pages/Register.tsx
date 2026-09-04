@@ -1,11 +1,13 @@
 import { useState } from 'react';
-import { useNavigate } from 'react-router-dom'; 
+import { useNavigate, Link } from 'react-router-dom';
+import axios from 'axios';
 import { AuthSidePanel } from '../components/auth/AuthSidePanel';
 import { Input } from '../components/ui/Input';
-import { api } from '../services/api'; 
+import { useAuth } from '../hooks/useAuth';
 
 export function Register() {
   const navigate = useNavigate();
+  const { register } = useAuth();
 
   const [formData, setFormData] = useState({
     fullName: '',
@@ -22,23 +24,33 @@ export function Register() {
     e.preventDefault();
     setErrorMessage(null);
 
+    if (formData.password.length < 6) {
+      setErrorMessage('A senha deve ter pelo menos 6 caracteres.');
+      return;
+    }
+
     if (formData.password !== formData.confirmPassword) {
       setErrorMessage('As senhas não coincidem. Verifique e tente novamente.');
       return;
     }
 
-    const payload = {
-      nome: formData.fullName,
-      email: formData.email,
-      senha: formData.password,
-    };
+    if (!formData.termsAccepted) {
+      setErrorMessage('Você deve aceitar os termos de uso para continuar.');
+      return;
+    }
 
     try {
       setLoading(true);
-      await api.post('/auth/register', payload);
-      navigate('/login');
-    } catch (error: any) {
-      if (error.response?.data?.detail) {
+      await register({
+        nome: formData.fullName.trim(),
+        email: formData.email.trim(),
+        senha: formData.password,
+      });
+
+      // Login automático realizado com sucesso pelo backend
+      navigate('/scanner', { replace: true });
+    } catch (error: unknown) {
+      if (axios.isAxiosError(error) && error.response?.data?.detail) {
         setErrorMessage(error.response.data.detail);
       } else {
         setErrorMessage('Ocorreu um erro ao tentar cadastrar. Tente novamente mais tarde.');
@@ -46,7 +58,7 @@ export function Register() {
     } finally {
       setLoading(false);
     }
-  }; 
+  };
 
   return (
     <div className="min-h-screen bg-dark-900 text-slate-100 flex selection:bg-brand-500 selection:text-white">
@@ -126,9 +138,9 @@ export function Register() {
               />
               <label htmlFor="terms" className="text-xs text-slate-400 leading-normal">
                 Li e aceito os{' '}
-                <a href="/termos" className="text-brand-400 hover:underline">
+                <span className="text-brand-400 hover:underline cursor-pointer">
                   termos de uso
-                </a>{' '}
+                </span>{' '}
                 e a política de privacidade do acervo público.
               </label>
             </div>
@@ -144,9 +156,9 @@ export function Register() {
 
           <p className="text-center text-xs text-slate-400">
             Já possui conta?{' '}
-            <a href="/login" className="text-brand-400 hover:underline font-medium">
+            <Link to="/login" className="text-brand-400 hover:underline font-medium">
               Entrar
-            </a>
+            </Link>
           </p>
         </div>
       </div>

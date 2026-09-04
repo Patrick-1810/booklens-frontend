@@ -1,11 +1,14 @@
 import { useState } from 'react';
-import { useNavigate } from 'react-router-dom';
+import { useNavigate, useLocation, Link } from 'react-router-dom';
+import axios from 'axios';
 import { AuthSidePanel } from '../components/auth/AuthSidePanel';
 import { Input } from '../components/ui/Input';
-import { api } from '../services/api';
+import { useAuth } from '../hooks/useAuth';
 
 export function Login() {
   const navigate = useNavigate();
+  const location = useLocation();
+  const { login } = useAuth();
 
   const [formData, setFormData] = useState({
     email: '',
@@ -20,23 +23,18 @@ export function Login() {
     e.preventDefault();
     setErrorMessage(null);
 
-    const payload = {
-      email: formData.email,
-      senha: formData.password,
-    };
-
     try {
       setLoading(true);
 
-      const response = await api.post('/auth/login', payload);
+      await login({
+        email: formData.email.trim(),
+        senha: formData.password,
+      });
 
-      if (response.data && response.data.usuario) {
-        localStorage.setItem('user', JSON.stringify(response.data.usuario));
-      }
-
-      navigate('/');
-    } catch (error: any) {
-      if (error.response?.data?.detail) {
+      const destination = (location.state as { from?: Location })?.from?.pathname || '/scanner';
+      navigate(destination, { replace: true });
+    } catch (error: unknown) {
+      if (axios.isAxiosError(error) && error.response?.data?.detail) {
         setErrorMessage(error.response.data.detail);
       } else {
         setErrorMessage('Não foi possível realizar o login. Verifique suas credenciais.');
@@ -86,11 +84,6 @@ export function Login() {
               value={formData.password}
               onChange={(e) => setFormData({ ...formData, password: e.target.value })}
               disabled={loading}
-              rightLabelAction={
-                <a href="/esqueci-senha" className="text-xs text-brand-400 hover:underline">
-                  Esqueceu a senha?
-                </a>
-              }
               required
             />
 
@@ -119,9 +112,9 @@ export function Login() {
 
           <p className="text-center text-xs text-slate-400">
             Não tem conta?{' '}
-            <a href="/register" className="text-brand-400 hover:underline font-medium">
+            <Link to="/register" className="text-brand-400 hover:underline font-medium">
               Criar conta
-            </a>
+            </Link>
           </p>
         </div>
       </div>
