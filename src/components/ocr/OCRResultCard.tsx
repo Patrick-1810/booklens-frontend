@@ -1,7 +1,21 @@
-import { CheckCircle2, Copy, FileText, Save, Highlighter, LayoutGrid, AlignLeft } from 'lucide-react';
-import { useState, useEffect, useRef } from 'react';
+import {
+  CheckCircle2,
+  Copy,
+  FileText,
+  Save,
+  Highlighter,
+  LayoutGrid,
+  AlignLeft,
+  Columns2,
+  FileCode,
+} from 'lucide-react';
+import { useState, useEffect, useRef, useMemo } from 'react';
 import type { OCRResponse, ElementoLayout, PalavraSuspeita } from '../../types/ocr';
 import { api } from '../../services/api';
+import {
+  converterElementosParaMarkdown,
+  limparMarkdownDocling,
+} from '../../utils/markdown-ocr';
 import ReactMarkdown from 'react-markdown';
 
 interface OCRResultCardProps {
@@ -16,8 +30,43 @@ const ALINHAMENTO_CLASS: Record<string, string> = {
   right: 'text-right',
 };
 
+const markdownComponents = {
+  h1: ({ ...props }) => (
+    <h1
+      className="text-lg sm:text-xl font-bold text-slate-900 border-b border-slate-200 pb-2 mt-4 mb-3 uppercase tracking-wide font-serif text-center"
+      {...props}
+    />
+  ),
+  h2: ({ ...props }) => (
+    <h2
+      className="text-base sm:text-lg font-semibold text-slate-900 border-b border-slate-100 pb-1.5 mt-4 mb-2.5 tracking-wide font-serif"
+      {...props}
+    />
+  ),
+  h3: ({ ...props }) => (
+    <h3
+      className="text-sm sm:text-base font-semibold text-slate-800 mt-3 mb-1.5 font-serif"
+      {...props}
+    />
+  ),
+  ul: ({ ...props }) => (
+    <ul className="list-disc pl-6 space-y-1.5 text-slate-800 my-2.5 text-sm" {...props} />
+  ),
+  ol: ({ ...props }) => (
+    <ol className="list-decimal pl-6 space-y-1.5 text-slate-800 my-2.5 text-sm" {...props} />
+  ),
+  li: ({ ...props }) => (
+    <li className="text-slate-800 leading-relaxed text-sm" {...props} />
+  ),
+  p: ({ ...props }) => (
+    <p className="text-slate-800 my-2.5 leading-relaxed text-sm text-justify" {...props} />
+  ),
+};
+
 export function OCRResultCard({ result, onReset }: OCRResultCardProps) {
   const [copied, setCopied] = useState(false);
+  const [copiedMd, setCopiedMd] = useState(false);
+
   const [titulo, setTitulo] = useState(
     result.titulo || result.estrutura?.titulo || 'SEM TÍTULO'
   );
@@ -27,7 +76,10 @@ export function OCRResultCard({ result, onReset }: OCRResultCardProps) {
   const [saving, setSaving] = useState(false);
   const [saveSuccess, setSaveSuccess] = useState(false);
   const [containerHeight, setContainerHeight] = useState<number>(0);
-  const [metodoComparacao, setMetodoComparacao] = useState<'pdi' | 'docling'>('pdi');
+
+  // Modos de visualização das extrações
+  const [metodoComparacao, setMetodoComparacao] = useState<'booklens' | 'docling' | 'lado-a-lado'>('booklens');
+  const [modoExibicaoBooklens, setModoExibicaoBooklens] = useState<'markdown' | 'pdi'>('markdown');
 
   const [menuCorrecao, setMenuCorrecao] = useState<{
     indexParagrafo: number;
@@ -52,7 +104,7 @@ export function OCRResultCard({ result, onReset }: OCRResultCardProps) {
     observer.observe(documentRef.current);
 
     return () => observer.disconnect();
-  }, [elementos]);
+  }, [elementos, metodoComparacao, modoExibicaoBooklens]);
 
   useEffect(() => {
     // eslint-disable-next-line react-hooks/set-state-in-effect
@@ -80,6 +132,22 @@ export function OCRResultCard({ result, onReset }: OCRResultCardProps) {
     }
   }, [result]);
 
+  // Markdown gerado pelo pipeline autoral 
+  const markdownBooklens = useMemo(() => {
+    if (result.texto_markdown) {
+      return result.texto_markdown;
+    }
+    if (result.estrutura?.texto_markdown) {
+      return result.estrutura.texto_markdown;
+    }
+    return converterElementosParaMarkdown(elementos, titulo);
+  }, [result.texto_markdown, result.estrutura?.texto_markdown, elementos, titulo]);
+
+  // Markdown gerado pelo Docling
+  const markdownDocling = useMemo(() => {
+    return limparMarkdownDocling(result.docling?.texto_markdown);
+  }, [result.docling?.texto_markdown]);
+
   const palavrasSuspeitas: PalavraSuspeita[] = result.palavras_suspeitas || [];
   const mapaSuspeitas = new Map<string, string[]>();
   palavrasSuspeitas.forEach((item) => {
@@ -87,10 +155,10 @@ export function OCRResultCard({ result, onReset }: OCRResultCardProps) {
   });
 
   const primeiroElemento = elementos[0];
-  const larguraPaginaOrig = 
-    primeiroElemento?.largura_pagina || 
-    result.largura_pagina || 
-    result.estrutura?.largura_pagina || 
+  const larguraPaginaOrig =
+    primeiroElemento?.largura_pagina ||
+    result.largura_pagina ||
+    result.estrutura?.largura_pagina ||
     1200;
 
   const alturaPaginaOrig =
@@ -107,6 +175,12 @@ export function OCRResultCard({ result, onReset }: OCRResultCardProps) {
     setTimeout(() => setCopied(false), 2000);
   };
 
+  const handleCopyMarkdown = (md: string) => {
+    navigator.clipboard.writeText(md);
+    setCopiedMd(true);
+    setTimeout(() => setCopiedMd(false), 2000);
+  };
+
   const handleElementoChange = (index: number, novoTexto: string) => {
     setElementos((prev) => {
       const novos = [...prev];
@@ -115,7 +189,11 @@ export function OCRResultCard({ result, onReset }: OCRResultCardProps) {
     });
   };
 
-  const aplicarSugestao = (indexParagrafo: number, palavraOriginal: string, sugestao: string) => {
+  const aplicarSugestao = (
+    indexParagrafo: number,
+    palavraOriginal: string,
+    sugestao: string
+  ) => {
     const elAtual = elementos[indexParagrafo];
     if (!elAtual) return;
 
@@ -209,35 +287,44 @@ export function OCRResultCard({ result, onReset }: OCRResultCardProps) {
   };
 
   return (
-    <div className="space-y-6 text-left max-w-4xl mx-auto" onClick={() => setMenuCorrecao(null)}>
+    <div
+      className="space-y-6 text-left max-w-5xl mx-auto"
+      onClick={() => setMenuCorrecao(null)}
+    >
+      {/* Cabeçalho */}
       <div className="flex flex-wrap items-center justify-between border-b border-slate-800 pb-4 gap-4">
         <div className="flex items-center gap-3">
-          <div className="p-2.5 bg-emerald-500/10 text-emerald-400 rounded-xl">
+          <div className="p-2.5 bg-emerald-500/10 text-emerald-400 rounded-xl border border-emerald-500/20">
             <CheckCircle2 className="w-6 h-6" />
           </div>
           <div>
             <h3 className="text-lg font-bold text-white">Documento Processado</h3>
             <p className="text-xs text-slate-400">
-              {result.tempo_processamento_segundos ? `Concluído em ${result.tempo_processamento_segundos}s • ` : ''}
+              {result.tempo_processamento_segundos
+                ? `Concluído em ${result.tempo_processamento_segundos}s • `
+                : ''}
               Registro #{result.id_registro || 'N/A'}
             </p>
           </div>
         </div>
 
-        <div className="flex items-center gap-2">
+        {/* Botões de Ação */}
+        <div className="flex items-center gap-2 flex-wrap">
+          {/* Seletor de Extrator / Página */}
           <div className="flex items-center bg-slate-900 p-0.5 rounded-lg border border-slate-800 mr-1">
-              <button
-                type="button"
-                onClick={() => setMetodoComparacao('pdi')}
-                className={`flex items-center gap-1.5 text-xs px-3 py-1.5 rounded-md font-medium transition-all ${
-                  metodoComparacao === 'pdi'
-                    ? 'bg-brand-500 text-white shadow-sm'
-                    : 'text-slate-400 hover:text-slate-200'
-                }`}
-              >
-        <LayoutGrid className="w-3.5 h-3.5" /> PDI + OCR (Autoral)
-      </button>
-         <button
+            <button
+              type="button"
+              onClick={() => setMetodoComparacao('booklens')}
+              className={`flex items-center gap-1.5 text-xs px-3 py-1.5 rounded-md font-medium transition-all ${
+                metodoComparacao === 'booklens'
+                  ? 'bg-brand-500 text-white shadow-sm'
+                  : 'text-slate-400 hover:text-slate-200'
+              }`}
+            >
+              <LayoutGrid className="w-3.5 h-3.5" /> BookLens (Autoral)
+            </button>
+
+            <button
               type="button"
               onClick={() => setMetodoComparacao('docling')}
               className={`flex items-center gap-1.5 text-xs px-3 py-1.5 rounded-md font-medium transition-all ${
@@ -246,16 +333,43 @@ export function OCRResultCard({ result, onReset }: OCRResultCardProps) {
                   : 'text-slate-400 hover:text-slate-200'
               }`}
             >
-          <AlignLeft className="w-3.5 h-3.5" /> Docling (IBM)
-       </button>
-    </div>
+              <AlignLeft className="w-3.5 h-3.5" /> Docling (IBM)
+            </button>
+
+            <button
+              type="button"
+              onClick={() => setMetodoComparacao('lado-a-lado')}
+              className={`flex items-center gap-1.5 text-xs px-3 py-1.5 rounded-md font-medium transition-all ${
+                metodoComparacao === 'lado-a-lado'
+                  ? 'bg-brand-500 text-white shadow-sm'
+                  : 'text-slate-400 hover:text-slate-200'
+              }`}
+            >
+              <Columns2 className="w-3.5 h-3.5" /> Lado a Lado
+            </button>
+          </div>
+
+          {metodoComparacao === 'booklens' && modoExibicaoBooklens === 'pdi' && (
+            <button
+              type="button"
+              onClick={handleGrifarSelecao}
+              className="flex items-center gap-1.5 text-xs font-medium text-slate-300 hover:text-white bg-slate-800 hover:bg-slate-700 transition-colors px-3 py-2 rounded-lg border border-slate-700"
+            >
+              <Highlighter className="w-4 h-4 text-amber-400" /> Grifar
+            </button>
+          )}
 
           <button
             type="button"
-            onClick={handleGrifarSelecao}
-            className="flex items-center gap-1.5 text-xs font-medium text-slate-300 hover:text-white bg-slate-800 hover:bg-slate-700 transition-colors px-3 py-2 rounded-lg border border-slate-700"
+            onClick={() => {
+              const mdAtual =
+                metodoComparacao === 'docling' ? markdownDocling : markdownBooklens;
+              handleCopyMarkdown(mdAtual);
+            }}
+            className="flex items-center gap-1.5 text-xs text-slate-300 hover:text-white bg-slate-800 hover:bg-slate-700 px-3 py-2 rounded-lg border border-slate-700 transition-all"
+            title="Copiar texto em formato Markdown"
           >
-            <Highlighter className="w-4 h-4 text-amber-400" /> Grifar
+            <FileCode className="w-4 h-4" /> {copiedMd ? 'Markdown Copiado!' : 'Copiar Markdown'}
           </button>
 
           <button
@@ -263,7 +377,7 @@ export function OCRResultCard({ result, onReset }: OCRResultCardProps) {
             onClick={handleCopyText}
             className="flex items-center gap-1.5 text-xs text-slate-300 hover:text-white bg-slate-800 hover:bg-slate-700 px-3 py-2 rounded-lg border border-slate-700 transition-all"
           >
-            <Copy className="w-4 h-4" /> {copied ? 'Copiado!' : 'Copiar'}
+            <Copy className="w-4 h-4" /> {copied ? 'Copiado!' : 'Copiar Texto'}
           </button>
 
           <button
@@ -286,138 +400,232 @@ export function OCRResultCard({ result, onReset }: OCRResultCardProps) {
         </div>
       </div>
 
-      <div
-        ref={documentRef}
-        style={{ aspectRatio: aspectRatioDocumento }}
-        className="bg-white text-slate-900 rounded-sm shadow-2xl p-[5%] font-serif border border-slate-200 relative w-full flex flex-col justify-start overflow-hidden"
-      >
-        <div className="border-b border-slate-300 pb-[2%] text-center mb-[3%]">
-          <p className="text-[10px] font-mono uppercase tracking-widest text-slate-400">
-            Documento Processado por OCR
-          </p>
-          <input
-            type="text"
-            value={titulo}
-            onChange={(e) => setTitulo(e.target.value)}
-            className="w-full text-center font-bold uppercase tracking-wide bg-transparent focus:outline-none focus:bg-amber-50 rounded px-2 text-slate-900"
-            style={{
-              fontSize: containerHeight > 0 ? `${Math.max(14, containerHeight * 0.024)}px` : '1.25rem',
-            }}
-          />
-        </div>
+      {/* CASO 1: PÁGINA INDIVIDUAL BOOKLENS (AUTORAL) */}
+      {metodoComparacao === 'booklens' && (
+        <div className="space-y-3">
+          {/* Sub-barra com alternador entre Markdown e Overlay PDI */}
+          <div className="flex items-center justify-between text-xs text-slate-400 px-1">
+            <div className="flex items-center gap-2">
+              <span className="font-semibold text-slate-200">BookLens (Pipeline Autoral):</span>
+              <span>Extração estruturada em Markdown</span>
+            </div>
 
-        {/* Renderização do resultado autoral (PDI / Overlay) */}
-        {metodoComparacao === 'pdi' && (
-          <div className="relative w-full h-full">
-            {elementos.map((item, index) => {
-              const alinhamentoClass = ALINHAMENTO_CLASS[item.alinhamento || 'left'] || 'text-left';
-              const hasCoords = item.x_relativo !== undefined && item.y_relativo !== undefined;
-              
-              let fontSizePx: number;
-              if (item.altura_fonte_relativa && containerHeight > 0) {
-                fontSizePx = Math.round(item.altura_fonte_relativa * containerHeight);
-                fontSizePx = Math.max(10, Math.min(fontSizePx, 40));
-              } else {
-                fontSizePx = item.tipo === 'title' ? 20 : item.tipo === 'heading' ? 16 : 13;
-              }
-
-              const stylePosicao: React.CSSProperties = hasCoords
-                ? {
-                    position: 'absolute',
-                    left: `${(item.x_relativo! * 100).toFixed(2)}%`,
-                    top: `${(item.y_relativo! * 100).toFixed(2)}%`,
-                    width: `${(item.width_relativo! * 100).toFixed(2)}%`,
-                    fontSize: `${fontSizePx}px`,
-                    lineHeight: 1.25,
-                    fontWeight: item.tipo === 'title' ? 700 : item.tipo === 'heading' ? 600 : 400,
-                  }
-                : { fontSize: `${fontSizePx}px`, lineHeight: 1.35 };
-
-              return (
-                <div
-                  key={item.id || index}
-                  contentEditable
-                  suppressContentEditableWarning
-                  onBlur={(e) => handleElementoChange(index, e.currentTarget.innerText)}
-                  style={stylePosicao}
-                  className={`focus:outline-none focus:bg-amber-50/50 p-0.5 rounded transition-colors text-slate-800 ${alinhamentoClass}`}
-                >
-                  {renderizarParagrafoInterativo(item.texto, index)}
-                </div>
-              );
-            })}
-          </div>
-        )}
-
-        {/* Renderização do resultado via Docling */}
-       {metodoComparacao === 'docling' && (() => { // Trata e limpa o texto do Markdown
-       const markdownLimpo = (result.docling?.texto_markdown || '')
-        .replace(/<!--\s*image\s*-->/gi, '') // Remove qualquer <!-- image -->
-        .replace(/\n\s*\n\s*\n/g, '\n\n');   // Remove linhas em branco excessivas que sobraram
-
-      return (
-        <div className="space-y-4 font-sans text-slate-800 p-4 overflow-y-auto max-h-full leading-relaxed">
-          <div className="bg-slate-100 p-2.5 rounded text-[11px] font-mono text-slate-500 mb-2 border border-slate-200">
-            Extração estruturada em Markdown (Docling)
-          </div>
-
-          <div className="prose prose-slate max-w-none space-y-3 text-sm">
-            <ReactMarkdown
-              components={{
-                h2: ({ ...props }) => (
-                  <h2 className="text-base font-bold text-slate-900 border-b border-slate-200 pb-1 mt-4 mb-2 uppercase tracking-wide" {...props} />
-                ),
-                ul: ({ ...props }) => (
-                  <ul className="list-disc pl-5 space-y-1 text-slate-700" {...props} />
-                ),
-                li: ({ ...props }) => (
-                  <li className="text-slate-700" {...props} />
-                ),
-                p: ({ ...props }) => (
-                  <p className="text-slate-800 my-1 leading-normal" {...props} />
-                ),
-              }}
-            >
-              {markdownLimpo || 'Nenhum texto extraído pelo Docling.'}
-            </ReactMarkdown>
-          </div>
-        </div>
-      );
-    })()}
-        {menuCorrecao && (
-          <div
-            style={{
-              top: `${menuCorrecao.posicao.top}px`,
-              left: `${menuCorrecao.posicao.left}px`,
-            }}
-            className="absolute z-50 bg-slate-900 border border-slate-700 text-white rounded-lg shadow-2xl p-2 w-56 text-xs space-y-1 font-sans"
-            onClick={(e) => e.stopPropagation()}
-          >
-            <p className="text-[10px] text-slate-400 uppercase tracking-wider px-2 py-1 border-b border-slate-800">
-              Sugestões ({menuCorrecao.palavraOriginal}):
-            </p>
-            <div className="flex flex-col gap-0.5">
-              {menuCorrecao.sugestoes.map((sugestao, idx) => (
-                <button
-                  key={idx}
-                  type="button"
-                  onClick={() =>
-                    aplicarSugestao(
-                      menuCorrecao.indexParagrafo,
-                      menuCorrecao.palavraOriginal,
-                      sugestao
-                    )
-                  }
-                  className="text-left px-2 py-1.5 hover:bg-brand-500/20 hover:text-brand-300 rounded text-slate-200 transition-colors font-mono"
-                >
-                  {sugestao}
-                </button>
-              ))}
+            <div className="flex items-center gap-1 bg-slate-900 border border-slate-800 p-0.5 rounded-md">
+              <button
+                type="button"
+                onClick={() => setModoExibicaoBooklens('markdown')}
+                className={`px-2.5 py-1 rounded text-xs transition-colors ${
+                  modoExibicaoBooklens === 'markdown'
+                    ? 'bg-brand-500 text-white font-medium'
+                    : 'text-slate-400 hover:text-slate-200'
+                }`}
+              >
+                Markdown Formatado
+              </button>
+              <button
+                type="button"
+                onClick={() => setModoExibicaoBooklens('pdi')}
+                className={`px-2.5 py-1 rounded text-xs transition-colors ${
+                  modoExibicaoBooklens === 'pdi'
+                    ? 'bg-brand-500 text-white font-medium'
+                    : 'text-slate-400 hover:text-slate-200'
+                }`}
+              >
+                Caixas de Layout (PDI)
+              </button>
             </div>
           </div>
-        )}
-      </div>
 
+          {/* Visualização em Markdown Formatado */}
+          {modoExibicaoBooklens === 'markdown' && (
+            <div className="bg-white text-slate-900 rounded-sm shadow-2xl p-8 sm:p-12 font-serif border border-slate-200 min-h-[500px]">
+              <div className="max-w-3xl mx-auto prose prose-slate">
+                <ReactMarkdown components={markdownComponents}>
+                  {markdownBooklens || '# Nenhum texto em Markdown disponível.'}
+                </ReactMarkdown>
+              </div>
+            </div>
+          )}
+
+          {/* Visualização em Caixas de Layout (Overlay PDI) */}
+          {modoExibicaoBooklens === 'pdi' && (
+            <div
+              ref={documentRef}
+              style={{ aspectRatio: aspectRatioDocumento }}
+              className="bg-white text-slate-900 rounded-sm shadow-2xl p-[5%] font-serif border border-slate-200 relative w-full flex flex-col justify-start overflow-hidden"
+            >
+              <div className="border-b border-slate-300 pb-[2%] text-center mb-[3%]">
+                <p className="text-[10px] font-mono uppercase tracking-widest text-slate-400">
+                  Documento Processado por OCR (Overlay PDI)
+                </p>
+                <input
+                  type="text"
+                  value={titulo}
+                  onChange={(e) => setTitulo(e.target.value)}
+                  className="w-full text-center font-bold uppercase tracking-wide bg-transparent focus:outline-none focus:bg-amber-50 rounded px-2 text-slate-900"
+                  style={{
+                    fontSize:
+                      containerHeight > 0
+                        ? `${Math.max(14, containerHeight * 0.024)}px`
+                        : '1.25rem',
+                  }}
+                />
+              </div>
+
+              <div className="relative w-full h-full">
+                {elementos.map((item, index) => {
+                  const alinhamentoClass =
+                    ALINHAMENTO_CLASS[item.alinhamento || 'left'] || 'text-left';
+                  const hasCoords =
+                    item.x_relativo !== undefined && item.y_relativo !== undefined;
+
+                  let fontSizePx: number;
+                  if (item.altura_fonte_relativa && containerHeight > 0) {
+                    fontSizePx = Math.round(item.altura_fonte_relativa * containerHeight);
+                    fontSizePx = Math.max(10, Math.min(fontSizePx, 40));
+                  } else {
+                    fontSizePx =
+                      item.tipo === 'title' ? 20 : item.tipo === 'heading' ? 16 : 13;
+                  }
+
+                  const stylePosicao: React.CSSProperties = hasCoords
+                    ? {
+                        position: 'absolute',
+                        left: `${(item.x_relativo! * 100).toFixed(2)}%`,
+                        top: `${(item.y_relativo! * 100).toFixed(2)}%`,
+                        width: `${(item.width_relativo! * 100).toFixed(2)}%`,
+                        fontSize: `${fontSizePx}px`,
+                        lineHeight: 1.25,
+                        fontWeight:
+                          item.tipo === 'title' ? 700 : item.tipo === 'heading' ? 600 : 400,
+                      }
+                    : { fontSize: `${fontSizePx}px`, lineHeight: 1.35 };
+
+                  return (
+                    <div
+                      key={item.id || index}
+                      contentEditable
+                      suppressContentEditableWarning
+                      onBlur={(e) => handleElementoChange(index, e.currentTarget.innerText)}
+                      style={stylePosicao}
+                      className={`focus:outline-none focus:bg-amber-50/50 p-0.5 rounded transition-colors text-slate-800 ${alinhamentoClass}`}
+                    >
+                      {renderizarParagrafoInterativo(item.texto, index)}
+                    </div>
+                  );
+                })}
+              </div>
+
+              {/* Menu de Correção de Palavras */}
+              {menuCorrecao && (
+                <div
+                  style={{
+                    top: `${menuCorrecao.posicao.top}px`,
+                    left: `${menuCorrecao.posicao.left}px`,
+                  }}
+                  className="absolute z-50 bg-slate-900 border border-slate-700 text-white rounded-lg shadow-2xl p-2 w-56 text-xs space-y-1 font-sans"
+                  onClick={(e) => e.stopPropagation()}
+                >
+                  <p className="text-[10px] text-slate-400 uppercase tracking-wider px-2 py-1 border-b border-slate-800">
+                    Sugestões ({menuCorrecao.palavraOriginal}):
+                  </p>
+                  <div className="flex flex-col gap-0.5">
+                    {menuCorrecao.sugestoes.map((sugestao, idx) => (
+                      <button
+                        key={idx}
+                        type="button"
+                        onClick={() =>
+                          aplicarSugestao(
+                            menuCorrecao.indexParagrafo,
+                            menuCorrecao.palavraOriginal,
+                            sugestao
+                          )
+                        }
+                        className="text-left px-2 py-1.5 hover:bg-brand-500/20 hover:text-brand-300 rounded text-slate-200 transition-colors font-mono"
+                      >
+                        {sugestao}
+                      </button>
+                    ))}
+                  </div>
+                </div>
+              )}
+            </div>
+          )}
+        </div>
+      )}
+
+      {/* CASO 2: PÁGINA INDIVIDUAL DOCLING (IBM) */}
+      {metodoComparacao === 'docling' && (
+        <div className="space-y-3">
+          <div className="text-xs text-slate-400 px-1 flex items-center gap-2">
+            <span className="font-semibold text-slate-200">Docling (IBM Deep Search):</span>
+            <span>Extração estruturada em Markdown</span>
+          </div>
+
+          <div className="bg-white text-slate-900 rounded-sm shadow-2xl p-8 sm:p-12 font-serif border border-slate-200 min-h-[500px]">
+            <div className="max-w-3xl mx-auto prose prose-slate">
+              <ReactMarkdown components={markdownComponents}>
+                {markdownDocling || 'Nenhum texto extraído pelo Docling.'}
+              </ReactMarkdown>
+            </div>
+          </div>
+        </div>
+      )}
+
+      {/* CASO 3: AS DUAS PÁGINAS LADO A LADO COM SUAS EXTRAÇÕES */}
+      {metodoComparacao === 'lado-a-lado' && (
+        <div className="grid grid-cols-1 lg:grid-cols-2 gap-6">
+          {/* Página 1: BookLens (Autoral) */}
+          <div className="space-y-2">
+            <div className="flex items-center justify-between px-1">
+              <span className="text-xs font-bold uppercase tracking-wider text-brand-400">
+                BookLens (Autoral)
+              </span>
+              <button
+                type="button"
+                onClick={() => handleCopyMarkdown(markdownBooklens)}
+                className="text-[11px] text-slate-400 hover:text-brand-300 flex items-center gap-1"
+              >
+                <Copy className="w-3 h-3" /> Copiar Markdown
+              </button>
+            </div>
+
+            <div className="bg-white text-slate-900 rounded-sm shadow-xl p-6 sm:p-8 font-serif border border-slate-200 max-h-[750px] overflow-y-auto">
+              <div className="prose prose-slate max-w-none">
+                <ReactMarkdown components={markdownComponents}>
+                  {markdownBooklens || '# Nenhum texto em Markdown disponível.'}
+                </ReactMarkdown>
+              </div>
+            </div>
+          </div>
+
+          {/* Página 2: Docling (IBM) */}
+          <div className="space-y-2">
+            <div className="flex items-center justify-between px-1">
+              <span className="text-xs font-bold uppercase tracking-wider text-indigo-400">
+                Docling (IBM)
+              </span>
+              <button
+                type="button"
+                onClick={() => handleCopyMarkdown(markdownDocling)}
+                className="text-[11px] text-slate-400 hover:text-indigo-300 flex items-center gap-1"
+              >
+                <Copy className="w-3 h-3" /> Copiar Markdown
+              </button>
+            </div>
+
+            <div className="bg-white text-slate-900 rounded-sm shadow-xl p-6 sm:p-8 font-serif border border-slate-200 max-h-[750px] overflow-y-auto">
+              <div className="prose prose-slate max-w-none">
+                <ReactMarkdown components={markdownComponents}>
+                  {markdownDocling || 'Nenhum texto extraído pelo Docling.'}
+                </ReactMarkdown>
+              </div>
+            </div>
+          </div>
+        </div>
+      )}
+
+      {/* Caixa de Anotações do Revisor */}
       <div className="p-4 bg-dark-900 border border-slate-800 rounded-xl space-y-2">
         <label className="text-[11px] font-semibold tracking-wider text-slate-400 uppercase flex items-center gap-1.5">
           <FileText className="w-3.5 h-3.5 text-amber-400" /> Anotações do Revisor / Observações
@@ -426,7 +634,7 @@ export function OCRResultCard({ result, onReset }: OCRResultCardProps) {
           rows={3}
           value={anotacoes}
           onChange={(e) => setAnotacoes(e.target.value)}
-          placeholder="Escreva aqui observações do revisor..."
+          placeholder="Escreva aqui observações do revisor sobre o documento..."
           className="w-full bg-dark-850 border border-slate-700/60 rounded-lg p-3 text-xs text-slate-300 focus:outline-none focus:border-brand-500 resize-none"
         />
       </div>
