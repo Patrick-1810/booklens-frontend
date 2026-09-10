@@ -19,6 +19,7 @@ export interface ElementoLayout {
   height_relativo?: number;
   altura_fonte_relativa?: number;
   numero_linhas?: number;
+  linhas_texto?: string[];
   largura_pagina?: number;
   altura_pagina?: number;
 }
@@ -30,11 +31,13 @@ export interface PalavraSuspeita {
 
 export interface EstruturaOCR {
   titulo?: string;
+  texto_markdown?: string;
   paragrafos?: string[];
   elementos?: ElementoLayout[];
-  largura_pagina?: number; 
+  largura_pagina?: number;
   altura_pagina?: number;
 }
+
 export interface DoclingResultado {
   texto_markdown?: string;
   paragrafos?: string[];
@@ -46,6 +49,7 @@ export interface OCRResponse {
   tempo_processamento_segundos?: number;
   texto_completo?: string;
   texto_completo_votado?: string;
+  texto_markdown?: string;
   titulo?: string;
   paragrafos?: string[];
   elementos?: ElementoLayout[];
