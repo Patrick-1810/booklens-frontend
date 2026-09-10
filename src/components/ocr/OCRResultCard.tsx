@@ -400,7 +400,7 @@ export function OCRResultCard({ result, onReset }: OCRResultCardProps) {
         </div>
       </div>
 
-      {/* CASO 1: PÁGINA INDIVIDUAL BOOKLENS (AUTORAL) */}
+      {/* PÁGINA INDIVIDUAL BOOKLENS (AUTORAL) */}
       {metodoComparacao === 'booklens' && (
         <div className="space-y-3">
           {/* Sub-barra com alternador entre Markdown e Overlay PDI */}
@@ -554,7 +554,7 @@ export function OCRResultCard({ result, onReset }: OCRResultCardProps) {
         </div>
       )}
 
-      {/* CASO 2: PÁGINA INDIVIDUAL DOCLING (IBM) */}
+      {/* PÁGINA INDIVIDUAL DOCLING (IBM) */}
       {metodoComparacao === 'docling' && (
         <div className="space-y-3">
           <div className="text-xs text-slate-400 px-1 flex items-center gap-2">
