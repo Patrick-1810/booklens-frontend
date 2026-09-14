@@ -1,6 +1,7 @@
 import { Navbar } from '../components/layout/Navbar';
 import { FeatureCard } from '../components/FeatureCard';
 import { Scan, BookOpen, Search, Zap, ShieldCheck } from 'lucide-react';
+import { Link } from 'react-router-dom';
 
 export function Home() {
   const features = [
@@ -50,25 +51,25 @@ export function Home() {
 
           {/* Subtítulo */}
           <p className="text-base sm:text-lg text-slate-400 leading-relaxed mb-8 max-w-2xl">
-            Envie uma imagem, receba título e parágrafos estruturados, pesquise termos com autocompletar e mantenha todo o acervo organized.
+            Envie uma imagem, receba título e parágrafos estruturados, pesquise termos com autocompletar e mantenha todo o acervo organizado.
           </p>
 
           {/* Botões CTA*/}
           <div className="flex flex-wrap items-center gap-3 mb-16">
-            <a
-              href="/scanner"
+            <Link
+              to="/scanner"
               className="inline-flex items-center gap-2.5 bg-brand-500 hover:bg-brand-600 text-white font-medium px-6 py-3 rounded-full transition-all shadow-sm"
             >
               <Scan className="w-4 h-4" />
               <span>Digitalizar agora</span>
-            </a>
-            <a
-              href="/documentos"
+            </Link>
+            <Link
+              to="/documents"
               className="inline-flex items-center gap-2.5 bg-slate-800 hover:bg-slate-700/80 border border-slate-700/80 text-slate-200 font-medium px-6 py-3 rounded-full transition-all"
             >
               <BookOpen className="w-4 h-4 text-slate-400" />
               <span>Ver acervo</span>
-            </a>
+            </Link>
           </div>
         </div>
 

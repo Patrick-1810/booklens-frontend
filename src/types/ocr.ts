@@ -46,16 +46,23 @@ export interface DoclingResultado {
 export interface OCRResponse {
   id_registro?: string | number;
   arquivo?: string;
+  nome_arquivo?: string;
   tempo_processamento_segundos?: number;
   texto_completo?: string;
   texto_completo_votado?: string;
+  texto_extraido?: string;
   texto_markdown?: string;
   titulo?: string;
+  titulo_documento?: string;
   paragrafos?: string[];
   elementos?: ElementoLayout[];
+  elementos_formatados?: ElementoLayout[];
   estrutura?: EstruturaOCR;
   docling?: DoclingResultado;
+  docling_formatado?: DoclingResultado;
   palavras_suspeitas?: PalavraSuspeita[];
+  anotacoes?: string;
+  motor_preferido?: string;
   largura_pagina?: number;
   altura_pagina?: number;
   confianca_preprocessamento?: number;
@@ -64,4 +71,25 @@ export interface OCRResponse {
 export interface SelectedFileState {
   file: File;
   previewUrl: string;
+}
+
+export interface DocumentoSalvo {
+  id: number;
+  usuario_id?: number;
+  titulo?: string;
+  titulo_documento?: string;
+  nome_arquivo?: string;
+  caminho_imagem?: string;
+  texto_completo?: string;
+  texto_extraido?: string;
+  texto_markdown?: string;
+  elementos?: ElementoLayout[];
+  elementos_formatados?: ElementoLayout[];
+  docling?: DoclingResultado;
+  docling_formatado?: DoclingResultado;
+  motor_preferido?: string;
+  paragrafos?: string[];
+  anotacoes?: string;
+  data_processamento?: string;
+  criado_em?: string;
 }

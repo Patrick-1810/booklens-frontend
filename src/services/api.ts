@@ -1,5 +1,6 @@
 import axios, { type InternalAxiosRequestConfig } from "axios";
 import type { RefreshTokenResponse } from "../types/auth";
+import type { DocumentoSalvo } from "../types/ocr";
 
 const TOKEN_KEY = "booklens_access_token";
 const REFRESH_TOKEN_KEY = "booklens_refresh_token";
@@ -39,7 +40,6 @@ export const authStorage = {
     localStorage.removeItem(TOKEN_KEY);
     localStorage.removeItem(REFRESH_TOKEN_KEY);
     localStorage.removeItem(USER_KEY);
-    // Remove legacy 'user' key if present
     localStorage.removeItem("user");
   },
 };
@@ -52,7 +52,6 @@ export const api = axios.create({
   },
 });
 
-// Interceptor de Requisição: Anexa o Bearer token
 api.interceptors.request.use(
   (config: InternalAxiosRequestConfig) => {
     const token = authStorage.getAccessToken();
@@ -64,7 +63,6 @@ api.interceptors.request.use(
   (error) => Promise.reject(error)
 );
 
-// Fila para requisições que aguardam a renovação do token
 let isRefreshing = false;
 let failedQueue: Array<{
   resolve: (token: string) => void;
@@ -82,13 +80,11 @@ const processQueue = (error: unknown, token: string | null = null) => {
   failedQueue = [];
 };
 
-// Interceptor de Resposta: Trata 401 e renova o par de tokens via refresh token
 api.interceptors.response.use(
   (response) => response,
   async (error) => {
     const originalRequest = error.config;
 
-    // Se não for erro 401 ou for uma requisição de auth, rejeita direto
     if (
       !error.response ||
       error.response.status !== 401 ||
@@ -102,7 +98,6 @@ api.interceptors.response.use(
 
     const refreshToken = authStorage.getRefreshToken();
 
-    // Sem refresh token, limpa dados e encerra
     if (!refreshToken) {
       authStorage.clearAuth();
       window.dispatchEvent(new Event("auth:logout"));
@@ -110,7 +105,6 @@ api.interceptors.response.use(
     }
 
     if (isRefreshing) {
-      // Se já está renovando, aguarda a promessa da renovação em andamento
       return new Promise((resolve, reject) => {
         failedQueue.push({ resolve, reject });
       })
@@ -125,7 +119,6 @@ api.interceptors.response.use(
     isRefreshing = true;
 
     try {
-      // Usa uma instância limpa de axios para evitar loops de interceptor
       const refreshResponse = await axios.post<RefreshTokenResponse>(
         `${api.defaults.baseURL}/auth/refresh`,
         { refresh_token: refreshToken },
@@ -134,13 +127,9 @@ api.interceptors.response.use(
 
       const { access_token, refresh_token: newRefreshToken } = refreshResponse.data;
 
-      // Atualiza os dois tokens (rotação de refresh token)
       authStorage.setTokens(access_token, newRefreshToken);
-
-      // Reprocessa requisições pendentes na fila
       processQueue(null, access_token);
 
-      // Atualiza o header da requisição original e refaz
       originalRequest.headers.Authorization = `Bearer ${access_token}`;
       return api(originalRequest);
     } catch (refreshError) {
@@ -153,3 +142,24 @@ api.interceptors.response.use(
     }
   }
 );
+
+export const documentosService = {
+  async listar(): Promise<DocumentoSalvo[]> {
+    const res = await api.get<DocumentoSalvo[]>("/ocr/documentos");
+    return Array.isArray(res.data) ? res.data : [];
+  },
+
+  async obterPorId(id: number | string): Promise<DocumentoSalvo> {
+    const res = await api.get<DocumentoSalvo>(`/ocr/documentos/${id}`);
+    return res.data;
+  },
+
+  async atualizar(id: number | string, dados: Record<string, unknown>): Promise<unknown> {
+    const res = await api.put(`/ocr/documentos/${id}`, dados);
+    return res.data;
+  },
+
+  async excluir(id: number | string): Promise<void> {
+    await api.delete(`/ocr/documentos/${id}`);
+  },
+};

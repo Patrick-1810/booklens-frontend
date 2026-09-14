@@ -1,10 +1,11 @@
-import { BrowserRouter, Routes, Route } from 'react-router-dom';
+import { BrowserRouter, Routes, Route, Navigate } from 'react-router-dom';
 import { AuthProvider } from './context/AuthContext';
 import { ProtectedRoute, PublicOnlyRoute } from './components/auth/ProtectedRoute';
 import { Home } from './pages/Home';
 import { Register } from './pages/Register';
 import { Login } from './pages/Login';
 import { Scanner } from './pages/Scanner';
+import { SavedDocuments } from './pages/SavedDocuments';
 
 export default function App() {
   return (
@@ -36,6 +37,15 @@ export default function App() {
               </ProtectedRoute>
             }
           />
+          <Route
+            path="/documents"
+            element={
+              <ProtectedRoute>
+                <SavedDocuments />
+              </ProtectedRoute>
+            }
+          />
+          <Route path="/documentos" element={<Navigate to="/documents" replace />} />
         </Routes>
       </BrowserRouter>
     </AuthProvider>

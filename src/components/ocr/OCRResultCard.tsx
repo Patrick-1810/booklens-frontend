@@ -7,7 +7,6 @@ import {
   LayoutGrid,
   AlignLeft,
   Columns2,
-  FileCode,
 } from 'lucide-react';
 import { useState, useEffect, useRef, useMemo } from 'react';
 import type { OCRResponse, ElementoLayout, PalavraSuspeita } from '../../types/ocr';
@@ -17,6 +16,7 @@ import {
   limparMarkdownDocling,
 } from '../../utils/markdown-ocr';
 import ReactMarkdown from 'react-markdown';
+import axios from 'axios';
 
 interface OCRResultCardProps {
   result: OCRResponse;
@@ -65,21 +65,17 @@ const markdownComponents = {
 
 export function OCRResultCard({ result, onReset }: OCRResultCardProps) {
   const [copied, setCopied] = useState(false);
-  const [copiedMd, setCopiedMd] = useState(false);
-
   const [titulo, setTitulo] = useState(
-    result.titulo || result.estrutura?.titulo || 'SEM TÍTULO'
+    result.titulo || result.titulo_documento || result.estrutura?.titulo || 'SEM TÍTULO'
   );
 
   const [elementos, setElementos] = useState<ElementoLayout[]>([]);
-  const [anotacoes, setAnotacoes] = useState('');
+  const [anotacoes, setAnotacoes] = useState(result.anotacoes || '');
   const [saving, setSaving] = useState(false);
   const [saveSuccess, setSaveSuccess] = useState(false);
   const [containerHeight, setContainerHeight] = useState<number>(0);
 
-  // Modos de visualização das extrações
   const [metodoComparacao, setMetodoComparacao] = useState<'booklens' | 'docling' | 'lado-a-lado'>('booklens');
-  const [modoExibicaoBooklens, setModoExibicaoBooklens] = useState<'markdown' | 'pdi'>('markdown');
 
   const [menuCorrecao, setMenuCorrecao] = useState<{
     indexParagrafo: number;
@@ -104,20 +100,26 @@ export function OCRResultCard({ result, onReset }: OCRResultCardProps) {
     observer.observe(documentRef.current);
 
     return () => observer.disconnect();
-  }, [elementos, metodoComparacao, modoExibicaoBooklens]);
+  }, [elementos, metodoComparacao]);
 
   useEffect(() => {
     // eslint-disable-next-line react-hooks/set-state-in-effect
-    setTitulo(result.titulo || result.estrutura?.titulo || 'SEM TÍTULO');
+    setTitulo(result.titulo || result.titulo_documento || result.estrutura?.titulo || 'SEM TÍTULO');
+    setAnotacoes(result.anotacoes || '');
 
-    const elementosRecebidos = result.elementos || result.estrutura?.elementos;
+    const elementosRecebidos =
+      result.elementos ||
+      result.elementos_formatados ||
+      result.estrutura?.elementos;
+
     if (elementosRecebidos && elementosRecebidos.length > 0) {
       setElementos(elementosRecebidos);
     } else {
       const pLista =
         (result.paragrafos && result.paragrafos.length > 0
           ? result.paragrafos
-          : result.estrutura?.paragrafos) || [
+          : result.estrutura?.paragrafos) ||
+        (result.texto_extraido ? result.texto_extraido.split('\n\n') : []) || [
           result.texto_completo_votado || result.texto_completo || '',
         ];
 
@@ -132,21 +134,18 @@ export function OCRResultCard({ result, onReset }: OCRResultCardProps) {
     }
   }, [result]);
 
-  // Markdown gerado pelo pipeline autoral 
   const markdownBooklens = useMemo(() => {
-    if (result.texto_markdown) {
-      return result.texto_markdown;
-    }
-    if (result.estrutura?.texto_markdown) {
-      return result.estrutura.texto_markdown;
-    }
+    if (result.texto_markdown) return result.texto_markdown;
+    if (result.estrutura?.texto_markdown) return result.estrutura.texto_markdown;
     return converterElementosParaMarkdown(elementos, titulo);
   }, [result.texto_markdown, result.estrutura?.texto_markdown, elementos, titulo]);
 
-  // Markdown gerado pelo Docling
   const markdownDocling = useMemo(() => {
-    return limparMarkdownDocling(result.docling?.texto_markdown);
-  }, [result.docling?.texto_markdown]);
+    const rawDocling =
+      result.docling?.texto_markdown ||
+      result.docling_formatado?.texto_markdown;
+    return limparMarkdownDocling(rawDocling);
+  }, [result.docling?.texto_markdown, result.docling_formatado?.texto_markdown]);
 
   const palavrasSuspeitas: PalavraSuspeita[] = result.palavras_suspeitas || [];
   const mapaSuspeitas = new Map<string, string[]>();
@@ -169,16 +168,14 @@ export function OCRResultCard({ result, onReset }: OCRResultCardProps) {
   const aspectRatioDocumento = `${larguraPaginaOrig} / ${alturaPaginaOrig}`;
 
   const handleCopyText = () => {
-    const textoFormatado = `${titulo}\n\n${elementos.map((e) => e.texto).join('\n\n')}`;
+    const textoFormatado =
+      metodoComparacao === 'docling'
+        ? (markdownDocling || '')
+        : `${titulo}\n\n${elementos.map((e) => e.texto).join('\n\n')}`;
+
     navigator.clipboard.writeText(textoFormatado);
     setCopied(true);
     setTimeout(() => setCopied(false), 2000);
-  };
-
-  const handleCopyMarkdown = (md: string) => {
-    navigator.clipboard.writeText(md);
-    setCopiedMd(true);
-    setTimeout(() => setCopiedMd(false), 2000);
   };
 
   const handleElementoChange = (index: number, novoTexto: string) => {
@@ -234,19 +231,40 @@ export function OCRResultCard({ result, onReset }: OCRResultCardProps) {
   };
 
   const handleSalvarDocumento = async () => {
+    const docId = result.id_registro;
+    if (!docId) {
+      console.warn('ID de registro não encontrado no objeto result:', result);
+      alert('Aviso: O identificador do documento não foi encontrado para atualização.');
+      return;
+    }
+
     try {
       setSaving(true);
-      await api.put(`/ocr/documentos/${result.id_registro}`, {
-        titulo,
+      const payload = {
+        titulo: titulo?.trim() || 'Documento sem título',
         elementos,
         paragrafos: elementos.map((e) => e.texto),
-        anotacoes,
-      });
+        docling_formatado: result.docling || result.docling_formatado || null,
+        anotacoes: anotacoes?.trim() || null,
+        motor_preferido: metodoComparacao,
+      };
+
+      console.log(`Enviando PUT /ocr/documentos/${docId}:`, payload);
+      const res = await api.put(`/ocr/documentos/${docId}`, payload);
+      console.log('Resposta de sucesso ao salvar:', res.data);
 
       setSaveSuccess(true);
       setTimeout(() => setSaveSuccess(false), 3000);
-    } catch {
-      alert('Erro ao salvar o documento.');
+    } catch (error: unknown) {
+      console.error('Erro ao salvar documento:', error);
+      let detalhe = 'Erro desconhecido ao salvar o documento.';
+      if (axios.isAxiosError(error)) {
+        detalhe = error.response?.data?.detail || error.response?.data?.message || error.message || detalhe;
+        console.error('Detalhes do erro na API:', error.response?.data);
+      } else if (error instanceof Error) {
+        detalhe = error.message;
+      }
+      alert(`Falha ao salvar o documento: ${detalhe}`);
     } finally {
       setSaving(false);
     }
@@ -274,8 +292,8 @@ export function OCRResultCard({ result, onReset }: OCRResultCardProps) {
                 sugestoes.length > 0 ? sugestoes : ['(Editar manualmente)']
               )
             }
-            className="bg-amber-100 hover:bg-amber-200 text-amber-900 border-b-2 border-amber-500 cursor-pointer font-semibold px-0.5 rounded transition-colors inline-block"
-            title="Clique para corrigir esta falha de OCR"
+            className="cursor-pointer hover:underline hover:text-brand-600 transition-colors inline"
+            title="Clique para ver sugestões de correção de OCR"
           >
             {token}
           </span>
@@ -310,7 +328,6 @@ export function OCRResultCard({ result, onReset }: OCRResultCardProps) {
 
         {/* Botões de Ação */}
         <div className="flex items-center gap-2 flex-wrap">
-          {/* Seletor de Extrator / Página */}
           <div className="flex items-center bg-slate-900 p-0.5 rounded-lg border border-slate-800 mr-1">
             <button
               type="button"
@@ -349,27 +366,13 @@ export function OCRResultCard({ result, onReset }: OCRResultCardProps) {
             </button>
           </div>
 
-          {metodoComparacao === 'booklens' && modoExibicaoBooklens === 'pdi' && (
-            <button
-              type="button"
-              onClick={handleGrifarSelecao}
-              className="flex items-center gap-1.5 text-xs font-medium text-slate-300 hover:text-white bg-slate-800 hover:bg-slate-700 transition-colors px-3 py-2 rounded-lg border border-slate-700"
-            >
-              <Highlighter className="w-4 h-4 text-amber-400" /> Grifar
-            </button>
-          )}
-
           <button
             type="button"
-            onClick={() => {
-              const mdAtual =
-                metodoComparacao === 'docling' ? markdownDocling : markdownBooklens;
-              handleCopyMarkdown(mdAtual);
-            }}
-            className="flex items-center gap-1.5 text-xs text-slate-300 hover:text-white bg-slate-800 hover:bg-slate-700 px-3 py-2 rounded-lg border border-slate-700 transition-all"
-            title="Copiar texto em formato Markdown"
+            onClick={handleGrifarSelecao}
+            className="flex items-center gap-1.5 text-xs font-medium text-slate-300 hover:text-white bg-slate-800 hover:bg-slate-700 transition-colors px-3 py-2 rounded-lg border border-slate-700"
+            title="Selecione um trecho de texto e clique para grifar"
           >
-            <FileCode className="w-4 h-4" /> {copiedMd ? 'Markdown Copiado!' : 'Copiar Markdown'}
+            <Highlighter className="w-4 h-4 text-amber-400" /> Grifar
           </button>
 
           <button
@@ -400,169 +403,119 @@ export function OCRResultCard({ result, onReset }: OCRResultCardProps) {
         </div>
       </div>
 
-      {/* PÁGINA INDIVIDUAL BOOKLENS (AUTORAL) */}
+      {/* Renderização do Resultado */}
       {metodoComparacao === 'booklens' && (
         <div className="space-y-3">
-          {/* Sub-barra com alternador entre Markdown e Overlay PDI */}
-          <div className="flex items-center justify-between text-xs text-slate-400 px-1">
-            <div className="flex items-center gap-2">
-              <span className="font-semibold text-slate-200">BookLens (Pipeline Autoral):</span>
-              <span>Extração estruturada em Markdown</span>
+          <div
+            ref={documentRef}
+            style={{ aspectRatio: aspectRatioDocumento }}
+            className="bg-white text-slate-900 rounded-sm shadow-2xl p-[5%] font-serif border border-slate-200 relative w-full flex flex-col justify-start overflow-hidden"
+          >
+            <div className="border-b border-slate-300 pb-[2%] text-center mb-[3%]">
+              <p className="text-[10px] font-mono uppercase tracking-widest text-slate-400">
+                Documento Processado por OCR (Overlay PDI)
+              </p>
+              <input
+                type="text"
+                value={titulo}
+                onChange={(e) => setTitulo(e.target.value)}
+                className="w-full text-center font-bold uppercase tracking-wide bg-transparent focus:outline-none focus:bg-amber-50 rounded px-2 text-slate-900"
+                style={{
+                  fontSize:
+                    containerHeight > 0
+                      ? `${Math.max(14, containerHeight * 0.024)}px`
+                      : '1.25rem',
+                }}
+              />
             </div>
 
-            <div className="flex items-center gap-1 bg-slate-900 border border-slate-800 p-0.5 rounded-md">
-              <button
-                type="button"
-                onClick={() => setModoExibicaoBooklens('markdown')}
-                className={`px-2.5 py-1 rounded text-xs transition-colors ${
-                  modoExibicaoBooklens === 'markdown'
-                    ? 'bg-brand-500 text-white font-medium'
-                    : 'text-slate-400 hover:text-slate-200'
-                }`}
-              >
-                Markdown Formatado
-              </button>
-              <button
-                type="button"
-                onClick={() => setModoExibicaoBooklens('pdi')}
-                className={`px-2.5 py-1 rounded text-xs transition-colors ${
-                  modoExibicaoBooklens === 'pdi'
-                    ? 'bg-brand-500 text-white font-medium'
-                    : 'text-slate-400 hover:text-slate-200'
-                }`}
-              >
-                Caixas de Layout (PDI)
-              </button>
-            </div>
-          </div>
+            <div className="relative w-full h-full">
+              {elementos.map((item, index) => {
+                const alinhamentoClass =
+                  ALINHAMENTO_CLASS[item.alinhamento || 'left'] || 'text-left';
+                const hasCoords =
+                  item.x_relativo !== undefined && item.y_relativo !== undefined;
 
-          {/* Visualização em Markdown Formatado */}
-          {modoExibicaoBooklens === 'markdown' && (
-            <div className="bg-white text-slate-900 rounded-sm shadow-2xl p-8 sm:p-12 font-serif border border-slate-200 min-h-[500px]">
-              <div className="max-w-3xl mx-auto prose prose-slate">
-                <ReactMarkdown components={markdownComponents}>
-                  {markdownBooklens || '# Nenhum texto em Markdown disponível.'}
-                </ReactMarkdown>
-              </div>
-            </div>
-          )}
+                let fontSizePx: number;
+                if (item.altura_fonte_relativa && containerHeight > 0) {
+                  fontSizePx = Math.round(item.altura_fonte_relativa * containerHeight);
+                  fontSizePx = Math.max(10, Math.min(fontSizePx, 40));
+                } else {
+                  fontSizePx =
+                    item.tipo === 'title' ? 20 : item.tipo === 'heading' ? 16 : 13;
+                }
 
-          {/* Visualização em Caixas de Layout (Overlay PDI) */}
-          {modoExibicaoBooklens === 'pdi' && (
-            <div
-              ref={documentRef}
-              style={{ aspectRatio: aspectRatioDocumento }}
-              className="bg-white text-slate-900 rounded-sm shadow-2xl p-[5%] font-serif border border-slate-200 relative w-full flex flex-col justify-start overflow-hidden"
-            >
-              <div className="border-b border-slate-300 pb-[2%] text-center mb-[3%]">
-                <p className="text-[10px] font-mono uppercase tracking-widest text-slate-400">
-                  Documento Processado por OCR (Overlay PDI)
-                </p>
-                <input
-                  type="text"
-                  value={titulo}
-                  onChange={(e) => setTitulo(e.target.value)}
-                  className="w-full text-center font-bold uppercase tracking-wide bg-transparent focus:outline-none focus:bg-amber-50 rounded px-2 text-slate-900"
-                  style={{
-                    fontSize:
-                      containerHeight > 0
-                        ? `${Math.max(14, containerHeight * 0.024)}px`
-                        : '1.25rem',
-                  }}
-                />
-              </div>
+                const stylePosicao: React.CSSProperties = hasCoords
+                  ? {
+                      position: 'absolute',
+                      left: `${(item.x_relativo! * 100).toFixed(2)}%`,
+                      top: `${(item.y_relativo! * 100).toFixed(2)}%`,
+                      width: `${(item.width_relativo! * 100).toFixed(2)}%`,
+                      fontSize: `${fontSizePx}px`,
+                      lineHeight: 1.25,
+                      fontWeight:
+                        item.tipo === 'title' ? 700 : item.tipo === 'heading' ? 600 : 400,
+                    }
+                  : { fontSize: `${fontSizePx}px`, lineHeight: 1.35 };
 
-              <div className="relative w-full h-full">
-                {elementos.map((item, index) => {
-                  const alinhamentoClass =
-                    ALINHAMENTO_CLASS[item.alinhamento || 'left'] || 'text-left';
-                  const hasCoords =
-                    item.x_relativo !== undefined && item.y_relativo !== undefined;
-
-                  let fontSizePx: number;
-                  if (item.altura_fonte_relativa && containerHeight > 0) {
-                    fontSizePx = Math.round(item.altura_fonte_relativa * containerHeight);
-                    fontSizePx = Math.max(10, Math.min(fontSizePx, 40));
-                  } else {
-                    fontSizePx =
-                      item.tipo === 'title' ? 20 : item.tipo === 'heading' ? 16 : 13;
-                  }
-
-                  const stylePosicao: React.CSSProperties = hasCoords
-                    ? {
-                        position: 'absolute',
-                        left: `${(item.x_relativo! * 100).toFixed(2)}%`,
-                        top: `${(item.y_relativo! * 100).toFixed(2)}%`,
-                        width: `${(item.width_relativo! * 100).toFixed(2)}%`,
-                        fontSize: `${fontSizePx}px`,
-                        lineHeight: 1.25,
-                        fontWeight:
-                          item.tipo === 'title' ? 700 : item.tipo === 'heading' ? 600 : 400,
-                      }
-                    : { fontSize: `${fontSizePx}px`, lineHeight: 1.35 };
-
-                  return (
-                    <div
-                      key={item.id || index}
-                      contentEditable
-                      suppressContentEditableWarning
-                      onBlur={(e) => handleElementoChange(index, e.currentTarget.innerText)}
-                      style={stylePosicao}
-                      className={`focus:outline-none focus:bg-amber-50/50 p-0.5 rounded transition-colors text-slate-800 ${alinhamentoClass}`}
-                    >
-                      {renderizarParagrafoInterativo(item.texto, index)}
-                    </div>
-                  );
-                })}
-              </div>
-
-              {/* Menu de Correção de Palavras */}
-              {menuCorrecao && (
-                <div
-                  style={{
-                    top: `${menuCorrecao.posicao.top}px`,
-                    left: `${menuCorrecao.posicao.left}px`,
-                  }}
-                  className="absolute z-50 bg-slate-900 border border-slate-700 text-white rounded-lg shadow-2xl p-2 w-56 text-xs space-y-1 font-sans"
-                  onClick={(e) => e.stopPropagation()}
-                >
-                  <p className="text-[10px] text-slate-400 uppercase tracking-wider px-2 py-1 border-b border-slate-800">
-                    Sugestões ({menuCorrecao.palavraOriginal}):
-                  </p>
-                  <div className="flex flex-col gap-0.5">
-                    {menuCorrecao.sugestoes.map((sugestao, idx) => (
-                      <button
-                        key={idx}
-                        type="button"
-                        onClick={() =>
-                          aplicarSugestao(
-                            menuCorrecao.indexParagrafo,
-                            menuCorrecao.palavraOriginal,
-                            sugestao
-                          )
-                        }
-                        className="text-left px-2 py-1.5 hover:bg-brand-500/20 hover:text-brand-300 rounded text-slate-200 transition-colors font-mono"
-                      >
-                        {sugestao}
-                      </button>
-                    ))}
+                return (
+                  <div
+                    key={item.id || index}
+                    contentEditable
+                    suppressContentEditableWarning
+                    onBlur={(e) => handleElementoChange(index, e.currentTarget.innerText)}
+                    style={stylePosicao}
+                    className={`focus:outline-none focus:bg-amber-50/50 p-0.5 rounded transition-colors text-slate-800 ${alinhamentoClass}`}
+                  >
+                    {renderizarParagrafoInterativo(item.texto, index)}
                   </div>
-                </div>
-              )}
+                );
+              })}
             </div>
-          )}
+
+            {menuCorrecao && (
+              <div
+                style={{
+                  top: `${menuCorrecao.posicao.top}px`,
+                  left: `${menuCorrecao.posicao.left}px`,
+                }}
+                className="absolute z-50 bg-slate-900 border border-slate-700 text-white rounded-lg shadow-2xl p-2 w-56 text-xs space-y-1 font-sans"
+                onClick={(e) => e.stopPropagation()}
+              >
+                <p className="text-[10px] text-slate-400 uppercase tracking-wider px-2 py-1 border-b border-slate-800">
+                  Sugestões ({menuCorrecao.palavraOriginal}):
+                </p>
+                <div className="flex flex-col gap-0.5">
+                  {menuCorrecao.sugestoes.map((sugestao, idx) => (
+                    <button
+                      key={idx}
+                      type="button"
+                      onClick={() =>
+                        aplicarSugestao(
+                          menuCorrecao.indexParagrafo,
+                          menuCorrecao.palavraOriginal,
+                          sugestao
+                        )
+                      }
+                      className="text-left px-2 py-1.5 hover:bg-brand-500/20 hover:text-brand-300 rounded text-slate-200 transition-colors font-mono"
+                    >
+                      {sugestao}
+                    </button>
+                  ))}
+                </div>
+              </div>
+            )}
+          </div>
         </div>
       )}
 
-      {/* PÁGINA INDIVIDUAL DOCLING (IBM) */}
       {metodoComparacao === 'docling' && (
         <div className="space-y-3">
-          <div className="text-xs text-slate-400 px-1 flex items-center gap-2">
-            <span className="font-semibold text-slate-200">Docling (IBM Deep Search):</span>
-            <span>Extração estruturada em Markdown</span>
-          </div>
-
-          <div className="bg-white text-slate-900 rounded-sm shadow-2xl p-8 sm:p-12 font-serif border border-slate-200 min-h-[500px]">
+          <div
+            contentEditable
+            suppressContentEditableWarning
+            className="bg-white text-slate-900 rounded-sm shadow-2xl p-8 sm:p-12 font-serif border border-slate-200 min-h-[500px] focus:outline-none"
+          >
             <div className="max-w-3xl mx-auto prose prose-slate">
               <ReactMarkdown components={markdownComponents}>
                 {markdownDocling || 'Nenhum texto extraído pelo Docling.'}
@@ -572,49 +525,34 @@ export function OCRResultCard({ result, onReset }: OCRResultCardProps) {
         </div>
       )}
 
-      {/* CASO 3: AS DUAS PÁGINAS LADO A LADO COM SUAS EXTRAÇÕES */}
       {metodoComparacao === 'lado-a-lado' && (
         <div className="grid grid-cols-1 lg:grid-cols-2 gap-6">
-          {/* Página 1: BookLens (Autoral) */}
           <div className="space-y-2">
-            <div className="flex items-center justify-between px-1">
-              <span className="text-xs font-bold uppercase tracking-wider text-brand-400">
-                BookLens (Autoral)
-              </span>
-              <button
-                type="button"
-                onClick={() => handleCopyMarkdown(markdownBooklens)}
-                className="text-[11px] text-slate-400 hover:text-brand-300 flex items-center gap-1"
-              >
-                <Copy className="w-3 h-3" /> Copiar Markdown
-              </button>
-            </div>
-
-            <div className="bg-white text-slate-900 rounded-sm shadow-xl p-6 sm:p-8 font-serif border border-slate-200 max-h-[750px] overflow-y-auto">
+            <span className="text-xs font-bold uppercase tracking-wider text-brand-400 block px-1">
+              BookLens (Autoral)
+            </span>
+            <div
+              contentEditable
+              suppressContentEditableWarning
+              className="bg-white text-slate-900 rounded-sm shadow-xl p-6 sm:p-8 font-serif border border-slate-200 max-h-[750px] overflow-y-auto focus:outline-none"
+            >
               <div className="prose prose-slate max-w-none">
                 <ReactMarkdown components={markdownComponents}>
-                  {markdownBooklens || '# Nenhum texto em Markdown disponível.'}
+                  {markdownBooklens || '# Nenhum texto disponível.'}
                 </ReactMarkdown>
               </div>
             </div>
           </div>
 
-          {/* Página 2: Docling (IBM) */}
           <div className="space-y-2">
-            <div className="flex items-center justify-between px-1">
-              <span className="text-xs font-bold uppercase tracking-wider text-indigo-400">
-                Docling (IBM)
-              </span>
-              <button
-                type="button"
-                onClick={() => handleCopyMarkdown(markdownDocling)}
-                className="text-[11px] text-slate-400 hover:text-indigo-300 flex items-center gap-1"
-              >
-                <Copy className="w-3 h-3" /> Copiar Markdown
-              </button>
-            </div>
-
-            <div className="bg-white text-slate-900 rounded-sm shadow-xl p-6 sm:p-8 font-serif border border-slate-200 max-h-[750px] overflow-y-auto">
+            <span className="text-xs font-bold uppercase tracking-wider text-indigo-400 block px-1">
+              Docling (IBM)
+            </span>
+            <div
+              contentEditable
+              suppressContentEditableWarning
+              className="bg-white text-slate-900 rounded-sm shadow-xl p-6 sm:p-8 font-serif border border-slate-200 max-h-[750px] overflow-y-auto focus:outline-none"
+            >
               <div className="prose prose-slate max-w-none">
                 <ReactMarkdown components={markdownComponents}>
                   {markdownDocling || 'Nenhum texto extraído pelo Docling.'}
@@ -625,7 +563,7 @@ export function OCRResultCard({ result, onReset }: OCRResultCardProps) {
         </div>
       )}
 
-      {/* Caixa de Anotações do Revisor */}
+      {/* Observações / Anotações do Revisor */}
       <div className="p-4 bg-dark-900 border border-slate-800 rounded-xl space-y-2">
         <label className="text-[11px] font-semibold tracking-wider text-slate-400 uppercase flex items-center gap-1.5">
           <FileText className="w-3.5 h-3.5 text-amber-400" /> Anotações do Revisor / Observações

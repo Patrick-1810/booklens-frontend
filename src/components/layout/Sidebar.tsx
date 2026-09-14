@@ -25,7 +25,6 @@ export function Sidebar({ onCloseMobile }: SidebarProps) {
   return (
     <aside className="w-64 bg-dark-850 border-r border-slate-800 flex flex-col justify-between h-full p-4">
       <div className="space-y-8">
-        {/* Logo BookLens */}
         <div className="flex items-center justify-between px-2 pt-2">
           <Link to="/" className="flex items-center gap-3 hover:opacity-90 transition-opacity">
             <div className="p-2.5 bg-slate-800/80 border border-slate-700/60 text-white rounded-xl shadow-inner flex items-center justify-center">
@@ -41,7 +40,6 @@ export function Sidebar({ onCloseMobile }: SidebarProps) {
             </div>
           </Link>
 
-          {/* Botão fechar (apenas visível em mobile quando ativado) */}
           {onCloseMobile && (
             <button
               onClick={onCloseMobile}
@@ -53,7 +51,6 @@ export function Sidebar({ onCloseMobile }: SidebarProps) {
           )}
         </div>
 
-        {/* Links de Navegação */}
         <nav className="space-y-1.5">
           {navItems.map((item) => {
             const Icon = item.icon;
@@ -78,9 +75,7 @@ export function Sidebar({ onCloseMobile }: SidebarProps) {
         </nav>
       </div>
 
-      {/* Card Informativo e Perfil no Rodapé */}
       <div className="space-y-3">
-        {/* Card do Usuário Logado */}
         {user && (
           <div className="p-3 bg-dark-900/60 border border-slate-800/80 rounded-2xl flex items-center gap-3">
             <div className="w-8 h-8 rounded-full bg-brand-500/20 border border-brand-500/30 flex items-center justify-center text-brand-400 font-semibold text-xs shrink-0">
@@ -93,7 +88,6 @@ export function Sidebar({ onCloseMobile }: SidebarProps) {
           </div>
         )}
 
-        {/* Botão de Sair */}
         <button
           onClick={handleLogout}
           className="w-full flex items-center gap-3 px-3.5 py-2.5 text-xs font-medium text-slate-400 hover:text-red-400 hover:bg-red-500/10 rounded-xl transition-all"

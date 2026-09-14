@@ -1,4 +1,4 @@
-import { FileText, LogOut, Scan } from 'lucide-react';
+import { FileText, LogOut } from 'lucide-react';
 import { Link } from 'react-router-dom';
 import { useAuth } from '../../hooks/useAuth';
 
@@ -27,14 +27,6 @@ export function Navbar() {
               <span className="text-xs text-slate-400 hidden sm:inline-block">
                 Olá, <strong className="text-slate-200 font-medium">{user.nome.split(' ')[0]}</strong>
               </span>
-
-              <Link
-                to="/scanner"
-                className="inline-flex items-center gap-2 text-xs font-semibold text-white bg-brand-500 hover:bg-brand-600 px-4 py-2 rounded-full transition-all shadow-sm"
-              >
-                <Scan className="w-3.5 h-3.5" />
-                <span>Scanner</span>
-              </Link>
 
               <button
                 onClick={logout}
